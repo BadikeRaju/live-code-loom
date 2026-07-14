@@ -498,11 +498,11 @@ function CodeLine({
     </div>
   );
 }
-const k = ({ children }: any) => <span className="text-syntax-keyword">{children}</span>;
-const s = ({ children }: any) => <span className="text-syntax-string">{children}</span>;
-const fn = ({ children }: any) => <span className="text-syntax-function">{children}</span>;
-const c = ({ children }: any) => <span className="text-syntax-comment italic">{children}</span>;
-const n = ({ children }: any) => <span className="text-syntax-number">{children}</span>;
+const K = ({ children }: any) => <span className="text-syntax-keyword">{children}</span>;
+const S = ({ children }: any) => <span className="text-syntax-string">{children}</span>;
+const Fn = ({ children }: any) => <span className="text-syntax-function">{children}</span>;
+const C = ({ children }: any) => <span className="text-syntax-comment italic">{children}</span>;
+const N = ({ children }: any) => <span className="text-syntax-number">{children}</span>;
 
 function ChatBubble({
   name,
