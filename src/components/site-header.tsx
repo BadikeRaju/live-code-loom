@@ -14,7 +14,6 @@ export function SiteHeader() {
             <a href="/#engine" className="transition-colors hover:text-zinc-200">Engine</a>
             <a href="/#integrations" className="transition-colors hover:text-zinc-200">Integrations</a>
             <a href="/#workflow" className="transition-colors hover:text-zinc-200">Workflow</a>
-            <a href="/#pricing" className="transition-colors hover:text-zinc-200">Pricing</a>
           </nav>
         </div>
         <div className="flex items-center gap-2">

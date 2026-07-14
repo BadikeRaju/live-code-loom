@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
-import { workspaces } from "@/lib/mock-data";
 
 const BASE_URL = "";
 
@@ -9,8 +8,7 @@ export const Route = createFileRoute("/sitemap.xml")({
     handlers: {
       GET: async () => {
         const staticPaths = ["/", "/login", "/register", "/dashboard", "/settings"];
-        const dynamicPaths = workspaces.map((w) => `/workspace/${w.id}`);
-        const urls = [...staticPaths, ...dynamicPaths]
+        const urls = [...staticPaths]
           .map(
             (p) =>
               `  <url>\n    <loc>${BASE_URL}${p}</loc>\n    <changefreq>weekly</changefreq>\n  </url>`,

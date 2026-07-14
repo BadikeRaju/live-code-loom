@@ -57,12 +57,14 @@ export function AuthShell({
 
 export function TextField({
   label,
+  name,
   type = "text",
   placeholder,
   hint,
   autoFocus,
 }: {
   label: string;
+  name?: string;
   type?: string;
   placeholder?: string;
   hint?: ReactNode;
@@ -76,6 +78,7 @@ export function TextField({
       </span>
       <input
         type={type}
+        name={name}
         placeholder={placeholder}
         autoFocus={autoFocus}
         className="h-10 rounded-md border border-zinc-800 bg-surface px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-brand focus:outline-none"

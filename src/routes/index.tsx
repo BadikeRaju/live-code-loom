@@ -51,13 +51,6 @@ function Landing() {
               <span className="grid size-4 place-items-center rounded-sm bg-black/10 font-mono">+</span>
               Deploy workspace
             </Link>
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-2 rounded-md border border-zinc-800 bg-panel px-3 py-2 text-sm font-medium text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-900"
-            >
-              View live demo
-              <ArrowRight className="size-4" />
-            </Link>
             <a
               href="#workflow"
               className="ml-2 font-mono text-xs uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
@@ -174,64 +167,7 @@ function Landing() {
         </div>
       </section>
 
-      {/* PRICING */}
-      <section id="pricing" className="border-t border-zinc-900 px-6 py-24">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-12 flex flex-col gap-3">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-brand">§ 04 · Pricing</span>
-            <h2 className="text-3xl font-semibold tracking-tight text-zinc-100 md:text-4xl">
-              Flat, honest, per-seat.
-            </h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {plans.map((p) => (
-              <div
-                key={p.name}
-                className={
-                  "flex flex-col gap-6 rounded-xl border p-6 " +
-                  (p.featured
-                    ? "border-brand/40 bg-gradient-to-b from-brand/5 to-transparent"
-                    : "border-zinc-800 bg-panel")
-                }
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium text-zinc-100">{p.name}</h3>
-                    {p.featured && (
-                      <span className="rounded-full bg-brand/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-brand">
-                        Popular
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm text-zinc-500">{p.tagline}</p>
-                </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-4xl font-semibold text-zinc-100">{p.price}</span>
-                  <span className="text-sm text-zinc-500">/ user / month</span>
-                </div>
-                <ul className="flex flex-1 flex-col gap-2 text-sm text-zinc-400">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <span className="mt-2 size-1 shrink-0 rounded-full bg-brand" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  className={
-                    "h-9 rounded-md text-sm font-medium " +
-                    (p.featured
-                      ? "bg-brand text-brand-foreground hover:brightness-110"
-                      : "border border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800")
-                  }
-                >
-                  {p.cta}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+
 
       {/* CTA */}
       <section className="px-6 pb-24">
@@ -304,41 +240,7 @@ const workflow = [
   { icon: Download, title: "Continue offline", body: "Clone or download the workspace and keep going in VS Code." },
 ];
 
-const plans = [
-  {
-    name: "Solo",
-    tagline: "For individual developers exploring the platform.",
-    price: "$0",
-    cta: "Start free",
-    features: ["1 private workspace", "Unlimited public workspaces", "GitHub push", "Community support"],
-  },
-  {
-    name: "Team",
-    tagline: "For engineering teams shipping together.",
-    price: "$12",
-    cta: "Start 14-day trial",
-    featured: true,
-    features: [
-      "Unlimited workspaces",
-      "Real-time collab up to 50 seats",
-      "Comments, suggestions & mentions",
-      "90 days of version history",
-      "Priority support",
-    ],
-  },
-  {
-    name: "Enterprise",
-    tagline: "Bring your own SSO and audit trail.",
-    price: "Custom",
-    cta: "Contact sales",
-    features: [
-      "SAML · SCIM · Audit logs",
-      "Self-hosted deployment option",
-      "Custom retention policies",
-      "Dedicated support engineer",
-    ],
-  },
-];
+
 
 function MockAppFrame() {
   return (

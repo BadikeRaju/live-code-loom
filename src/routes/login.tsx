@@ -1,6 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Github } from "lucide-react";
 import { AuthShell, TextField } from "@/components/auth-shell";
+import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -14,6 +16,40 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("http://localhost:1234/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+      
+      login(data.token, data.user);
+      navigate({ to: "/dashboard" });
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AuthShell
       title="Welcome back"
@@ -27,15 +63,11 @@ function LoginPage() {
         </span>
       }
     >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          navigate({ to: "/dashboard" });
-        }}
-        className="flex flex-col gap-4"
-      >
-        <TextField label="Email" type="email" placeholder="you@company.dev" autoFocus />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {error && <div className="text-red-500 text-sm font-medium">{error}</div>}
+        <TextField name="email" label="Email" type="email" placeholder="you@company.dev" autoFocus />
         <TextField
+          name="password"
           label="Password"
           type="password"
           placeholder="••••••••"
@@ -50,9 +82,10 @@ function LoginPage() {
         </label>
         <button
           type="submit"
-          className="mt-2 inline-flex h-10 items-center justify-center rounded-md bg-brand text-sm font-medium text-brand-foreground hover:brightness-110"
+          disabled={loading}
+          className="mt-2 inline-flex h-10 items-center justify-center rounded-md bg-brand text-sm font-medium text-brand-foreground hover:brightness-110 disabled:opacity-50"
         >
-          Sign in
+          {loading ? "Signing in..." : "Sign in"}
         </button>
         <div className="relative my-2 h-px bg-zinc-800">
           <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
