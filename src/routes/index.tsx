@@ -410,25 +410,25 @@ function MockAppFrame() {
           </div>
           <div className="flex-1 overflow-hidden p-5 font-mono text-[12.5px] leading-relaxed">
             <CodeLine n={1}>
-              <k>import</k> {"{ Router } "}<k>from</k> <s>"express"</s>;
+              <K>import</K> {"{ Router } "}<K>from</K> <S>"express"</S>;
             </CodeLine>
             <CodeLine n={2}>
-              <c>// Real-time — Alex is editing this line</c>
+              <C>{"// Real-time — Alex is editing this line"}</C>
             </CodeLine>
             <CodeLine n={3} cursor="Alex" cursorColor="bg-emerald-500">
-              <k>const</k> router = <fn>Router</fn>();
+              <K>const</K> router = <Fn>Router</Fn>();
             </CodeLine>
             <CodeLine n={4}>&nbsp;</CodeLine>
             <CodeLine n={5}>
-              router.<fn>get</fn>(<s>"/health"</s>, (req, res) {"=> {"}
+              router.<Fn>get</Fn>(<S>"/health"</S>, (req, res) {"=> {"}
             </CodeLine>
             <CodeLine n={6} cursor="Jordan" cursorColor="bg-sky-500" cursorLeft="left-40">
-              &nbsp;&nbsp;res.<fn>status</fn>(<n>200</n>).<fn>send</fn>({"{ status: "}<s>"up"</s>{" }"});
+              &nbsp;&nbsp;res.<Fn>status</Fn>(<N>200</N>).<Fn>send</Fn>({"{ status: "}<S>"up"</S>{" }"});
             </CodeLine>
             <CodeLine n={7}>{"});"}</CodeLine>
             <CodeLine n={8}>&nbsp;</CodeLine>
             <CodeLine n={9}>
-              <k>export default</k> router;
+              <K>export default</K> router;
             </CodeLine>
           </div>
           <div className="flex h-6 items-center justify-between border-t border-zinc-800 bg-brand/5 px-3 font-mono text-[10px] text-zinc-500">
