@@ -146,9 +146,21 @@ function Dashboard() {
       {showCreateModal && (
         <CreateWorkspaceModal
           onClose={() => setShowCreateModal(false)}
-          onCreate={(name, visibility, template) => {
-            setShowCreateModal(false);
-            navigate({ to: "/workspace/$id", params: { id: name.toLowerCase().replace(/\s+/g, "-") } });
+          onCreate={async (name, visibility, template) => {
+            try {
+              const res = await fetch("http://localhost:1234/api/workspaces", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ name, language: "TypeScript", description: `Template: ${template}` })
+              });
+              if (!res.ok) throw new Error("Failed to create workspace");
+              const newWs = await res.json();
+              setShowCreateModal(false);
+              navigate({ to: "/workspace/$id", params: { id: newWs.id } });
+            } catch (err) {
+              console.error(err);
+              alert("Failed to create workspace");
+            }
           }}
         />
       )}
@@ -332,7 +344,7 @@ function Dashboard() {
                   </div>
                   <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
                     <div className="flex -space-x-1.5">
-                      {w.members.slice(0, 4).map((m) => (
+                      {w.members.slice(0, 4).map((m: any) => (
                         <span
                           key={m.id}
                           className={`grid size-6 place-items-center rounded-full ${m.color} text-[10px] font-bold text-zinc-950 ring-2 ring-panel`}
@@ -396,7 +408,7 @@ function Dashboard() {
                       {new Date(w.updatedAt).toLocaleDateString()}
                     </span>
                     <div className="flex -space-x-1.5">
-                      {w.members.slice(0, 3).map((m) => (
+                      {w.members.slice(0, 3).map((m: any) => (
                         <span key={m.id} className={`grid size-5 place-items-center rounded-full ${m.color} text-[9px] font-bold text-zinc-950 ring-1 ring-panel`} title={m.name}>
                           {m.initials}
                         </span>

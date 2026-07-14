@@ -105,7 +105,7 @@ app.get("/api/workspaces", requireAuth, async (req, res) => {
         JOIN User u ON wm.userId = u.id
         WHERE wm.workspaceId = ?
       `, [w.id]);
-      
+
       // format members to match what Prisma returned
       w.members = members.map((m: any) => ({
         id: m.id,
@@ -142,7 +142,7 @@ app.post("/api/workspaces", requireAuth, async (req, res) => {
     // Fetch the created workspace with members
     const [workspaces] = await pool.query<RowDataPacket[]>("SELECT * FROM Workspace WHERE id = ?", [workspaceId]);
     const workspace = workspaces[0];
-    
+
     const [members] = await pool.query<RowDataPacket[]>(`
       SELECT wm.id, wm.role, u.id as userId, u.name, u.email, u.color
       FROM WorkspaceMember wm
@@ -173,7 +173,7 @@ app.get("/api/workspaces/:id", requireAuth, async (req, res) => {
       return;
     }
     const workspace = workspaces[0];
-    
+
     const [members] = await pool.query<RowDataPacket[]>(`
       SELECT wm.id, wm.role, u.id as userId, u.name, u.email, u.color
       FROM WorkspaceMember wm
@@ -249,7 +249,7 @@ app.get("/api/notifications", requireAuth, async (req, res) => {
   try {
     const userId = (req as any).user.id;
     const [notifications] = await pool.query<RowDataPacket[]>(
-      "SELECT * FROM Notification WHERE userId = ? ORDER BY createdAt DESC", 
+      "SELECT * FROM Notification WHERE userId = ? ORDER BY createdAt DESC",
       [userId]
     );
     res.json(notifications);
@@ -265,7 +265,7 @@ setPersistence({
     // docName is expected to be workspaceId_filename
     const [workspaceId, ...filenameParts] = docName.split("_");
     const filename = filenameParts.join("_");
-    
+
     try {
       const [docs] = await pool.query<RowDataPacket[]>(
         "SELECT state FROM DocumentState WHERE workspaceId = ? AND filename = ?",
@@ -283,7 +283,7 @@ setPersistence({
     const filename = filenameParts.join("_");
     const state = Buffer.from(Y.encodeStateAsUpdate(ydoc));
     const docId = uuidv4();
-    
+
     try {
       await pool.execute(
         `INSERT INTO DocumentState (id, workspaceId, filename, state, createdAt, updatedAt) 
