@@ -58,6 +58,9 @@ const activity: any[] = [];
 const initialMessages: any[] = [];
 const initialVersionHistory: any[] = [];
 const initialComments: any[] = [];
+const members: any[] = [
+  { id: "fallback", name: "User", handle: "user", initials: "U", color: "bg-zinc-700", role: "Owner", online: true }
+];
 import { LogoMark } from "@/components/site-header";
 
 export const Route = createFileRoute("/workspace/$id")({
@@ -99,13 +102,11 @@ function useToast() {
 }
 
 function WorkspacePage() {
-  const { workspaceId } = Route.useLoaderData() as { workspaceId: string };
+  const { workspaceId } = Route.useLoaderData();
   const { token, user } = useAuth();
   const [workspace, setWorkspace] = useState<any>(null);
 
-  const { activity, messages, versionHistory, pushMessage, pushActivity, pushHistory } = useWorkspaceGlobal(workspaceId, user);
-
-  useEffect(() => {
+  const loadWorkspace = useCallback(() => {
     if (token) {
       fetch(`http://localhost:1234/api/workspaces/${workspaceId}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -116,11 +117,11 @@ function WorkspacePage() {
     }
   }, [token, workspaceId]);
 
-  const { toasts, show } = useToast();
+  useEffect(() => {
+    loadWorkspace();
+  }, [loadWorkspace]);
 
-  if (!workspace) {
-    return <div className="flex h-screen items-center justify-center bg-background text-zinc-400 font-mono text-sm">Loading workspace...</div>;
-  }
+  const { toasts, show } = useToast();
 
   const [tabs, setTabs] = useState<Tab[]>([
     { id: "src/index.ts", name: "index.ts", kind: "code", dirty: true },
@@ -134,7 +135,12 @@ function WorkspacePage() {
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
 
   // Comments state (mutable)
-  const [comments, setComments] = useState<CommentType[]>([]);
+  const [comments, setComments] = useState<CommentType[]>(
+    initialComments.map((c) => ({ ...c, replies: [] }))
+  );
+
+  // Version history state (mutable)
+  const [versionHistory, setVersionHistory] = useState(initialVersionHistory);
 
   // File tree state (mutable for new file/folder)
   const [tree, setTree] = useState<FileNode[]>(fileTree);
@@ -196,8 +202,10 @@ function WorkspacePage() {
     show(`Committing: "${msg}"…`, "info");
     setTimeout(() => {
       const label = `v0.${14 + versionHistory.length}.${versionHistory.length}`;
-      pushHistory({ id: `v${Date.now()}`, label, author: user?.name?.split(' ')[0] || "You", when: "just now", note: msg });
-      pushActivity({ id: `a${Date.now()}`, who: user?.name?.split(' ')[0] || "You", action: "committed", target: label, when: "just now" });
+      setVersionHistory((prev) => [
+        { id: `v${Date.now()}`, label, author: "You", when: "just now", note: msg },
+        ...prev,
+      ]);
       setTabs((prev) => prev.map((t) => ({ ...t, dirty: false })));
       show(`✓ Committed as ${label}${andPush ? " and pushed" : ""}`, "success");
     }, 1000);
@@ -249,6 +257,23 @@ function WorkspacePage() {
     show(`✓ Created ${type} "${name}"`, "success");
   };
 
+  const workspaceMembers = useMemo(() => {
+    if (!workspace || !workspace.members) return [];
+    return workspace.members.map((m: any) => ({
+      id: m.userId,
+      name: m.user?.name || "Unknown User",
+      handle: m.user?.name ? m.user.name.split(" ")[0].toLowerCase() : "unknown",
+      initials: m.user?.name ? m.user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() : "??",
+      color: m.user?.color || "bg-zinc-700",
+      role: m.role === 'owner' ? 'Owner' : (m.role === 'editor' ? 'Editor' : 'Viewer'),
+      online: true
+    }));
+  }, [workspace]);
+
+  if (!workspace) {
+    return <div className="flex h-screen items-center justify-center bg-background text-zinc-400 font-mono text-sm">Loading workspace...</div>;
+  }
+
   return (
     <div className="flex h-screen min-h-screen flex-col overflow-hidden bg-background text-zinc-300">
       {/* Toast notifications */}
@@ -268,9 +293,28 @@ function WorkspacePage() {
 
       {/* Invite modal */}
       {showInviteModal && (
-        <InviteModal onClose={() => setShowInviteModal(false)} onInvite={(email) => {
+        <InviteModal onClose={() => setShowInviteModal(false)} onInvite={async (email) => {
+          try {
+            const res = await fetch(`http://localhost:1234/api/workspaces/${workspaceId}/share`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              show(data.error || "Failed to invite user", "error");
+            } else {
+              show(`Successfully invited ${email}!`, "success");
+              loadWorkspace();
+            }
+          } catch (err) {
+            console.error(err);
+            show("Error sending invitation", "error");
+          }
           setShowInviteModal(false);
-          show(`Invite sent to ${email}`, "success");
         }} />
       )}
 
@@ -420,15 +464,12 @@ function WorkspacePage() {
               active={rightTab}
               comments={comments}
               versionHistory={versionHistory}
-              activity={activity}
-              messages={messages}
-              members={workspace.members}
-              pushMessage={pushMessage}
               onResolveComment={resolveComment}
               onReplyComment={replyToComment}
               onRestoreVersion={restoreVersion}
               onInvite={() => setShowInviteModal(true)}
               onToast={show}
+              members={workspaceMembers}
             />
           </Panel>
         </PanelGroup>
@@ -468,7 +509,7 @@ function WorkspacePage() {
             <span className="size-1.5 animate-pulse rounded-full bg-brand" /> Connected · yjs
           </span>
           <span className="hidden sm:inline">Auto-saved · 2s ago</span>
-          <span className="hidden md:inline">{workspace.members?.length || 0} online</span>
+          <span className="hidden md:inline">{workspaceMembers.filter((m: any) => m.online).length} online</span>
         </div>
         <div className="flex items-center gap-4">
           <span>UTF-8</span>
@@ -929,15 +970,6 @@ function TabBar({
 const ydocs = new Map<string, Y.Doc>();
 const yproviders = new Map<string, WebsocketProvider>();
 
-const TAILWIND_COLORS: Record<string, string> = {
-  "bg-emerald-500": "#10b981", "bg-sky-500": "#0ea5e9", "bg-fuchsia-500": "#d946ef",
-  "bg-amber-500": "#f59e0b", "bg-rose-500": "#f43f5e", "bg-indigo-500": "#6366f1",
-  "bg-blue-500": "#3b82f6", "bg-teal-500": "#14b8a6", "bg-cyan-500": "#06b6d4",
-  "bg-purple-500": "#a855f7", "bg-pink-500": "#ec4899", "bg-red-500": "#ef4444",
-  "bg-orange-500": "#f97316", "bg-yellow-500": "#eab308", "bg-lime-500": "#84cc16",
-  "bg-green-500": "#22c55e"
-};
-
 function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
   const roomName = `${workspaceId}_${filename}`;
   if (!ydocs.has(roomName)) {
@@ -946,47 +978,7 @@ function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
     
     provider.awareness.setLocalStateField("user", {
       name: user?.name || "Anonymous",
-      color: TAILWIND_COLORS[user?.color] || user?.color || "#10b981",
-    });
-
-    provider.awareness.on("change", () => {
-      const states = provider.awareness.getStates();
-      let css = "";
-      states.forEach((state: any, clientId: number) => {
-        if (state.user) {
-          const color = state.user.color;
-          css += `
-            .yRemoteSelection-${clientId} {
-              background-color: ${color}33 !important;
-            }
-            .yRemoteSelectionHead-${clientId} {
-              border-left: 2px solid ${color} !important;
-            }
-            .yRemoteSelectionHead-${clientId}::after {
-              content: "${state.user.name}";
-              position: absolute;
-              top: -18px;
-              left: -2px;
-              background-color: ${color};
-              color: #fff;
-              padding: 2px 6px;
-              border-radius: 4px;
-              font-size: 10px;
-              font-family: sans-serif;
-              white-space: nowrap;
-              z-index: 10;
-              pointer-events: none;
-            }
-          `;
-        }
-      });
-      let styleEl = document.getElementById("yjs-awareness-styles");
-      if (!styleEl) {
-        styleEl = document.createElement("style");
-        styleEl.id = "yjs-awareness-styles";
-        document.head.appendChild(styleEl);
-      }
-      styleEl.textContent = css;
+      color: user?.color || "#10b981",
     });
     
     ydocs.set(roomName, doc);
@@ -994,58 +986,6 @@ function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
   }
   return { doc: ydocs.get(roomName)!, provider: yproviders.get(roomName)! };
 }
-
-function useWorkspaceGlobal(workspaceId: string, user: any) {
-  const { doc, provider } = useMemo(() => {
-    const roomName = `${workspaceId}_global`;
-    if (!ydocs.has(roomName)) {
-      const doc = new Y.Doc();
-      const provider = new WebsocketProvider("ws://localhost:1234", roomName, doc);
-      provider.awareness.setLocalStateField("user", {
-        name: user?.name || "Anonymous",
-        color: TAILWIND_COLORS[user?.color] || user?.color || "#10b981",
-      });
-      ydocs.set(roomName, doc);
-      yproviders.set(roomName, provider);
-    }
-    return { doc: ydocs.get(roomName)!, provider: yproviders.get(roomName)! };
-  }, [workspaceId, user]);
-
-  const [activity, setActivity] = useState<any[]>([]);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [versionHistory, setVersionHistory] = useState<any[]>([]);
-
-  useEffect(() => {
-    const yActivity = doc.getArray('activity');
-    const yMessages = doc.getArray('messages');
-    const yHistory = doc.getArray('versionHistory');
-
-    const updateActivity = () => setActivity(yActivity.toArray());
-    const updateMessages = () => setMessages(yMessages.toArray());
-    const updateHistory = () => setVersionHistory(yHistory.toArray());
-
-    yActivity.observe(updateActivity);
-    yMessages.observe(updateMessages);
-    yHistory.observe(updateHistory);
-
-    updateActivity();
-    updateMessages();
-    updateHistory();
-
-    return () => {
-      yActivity.unobserve(updateActivity);
-      yMessages.unobserve(updateMessages);
-      yHistory.unobserve(updateHistory);
-    };
-  }, [doc]);
-
-  const pushMessage = useCallback((msg: any) => doc.getArray('messages').push([msg]), [doc]);
-  const pushActivity = useCallback((act: any) => doc.getArray('activity').push([act]), [doc]);
-  const pushHistory = useCallback((hist: any) => doc.getArray('versionHistory').push([hist]), [doc]);
-
-  return { activity, messages, versionHistory, pushMessage, pushActivity, pushHistory };
-}
-
 
 const defaultContent = (filename: string) => {
   if (filename.endsWith(".ts") || filename.endsWith(".tsx")) {
@@ -1233,28 +1173,22 @@ function RightPanel({
   active,
   comments,
   versionHistory,
-  activity,
-  messages,
-  members,
-  pushMessage,
   onResolveComment,
   onReplyComment,
   onRestoreVersion,
   onInvite,
   onToast,
+  members,
 }: {
   active: "members" | "chat" | "activity" | "comments" | "history";
   comments: CommentData[];
-  versionHistory: any[];
-  activity: any[];
-  messages: any[];
-  members: any[];
-  pushMessage: (msg: any) => void;
+  versionHistory: typeof initialVersionHistory;
   onResolveComment: (id: string) => void;
   onReplyComment: (id: string, text: string) => void;
   onRestoreVersion: (label: string) => void;
   onInvite: () => void;
   onToast: (msg: string, type?: "success" | "error" | "info") => void;
+  members: any[];
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -1262,9 +1196,9 @@ function RightPanel({
         <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-100">{active}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
-        {active === "chat" && <ChatPanel messages={messages} pushMessage={pushMessage} members={members} onToast={onToast} />}
+        {active === "chat" && <ChatPanel onToast={onToast} />}
         {active === "members" && <MembersPanel members={members} onInvite={onInvite} />}
-        {active === "activity" && <ActivityPanel activity={activity} />}
+        {active === "activity" && <ActivityPanel />}
         {active === "comments" && (
           <CommentsPanel
             comments={comments}
@@ -1280,8 +1214,9 @@ function RightPanel({
   );
 }
 
-function ChatPanel({ messages, pushMessage, members, onToast }: { messages: any[], pushMessage: (m: any) => void, members: any[], onToast: (msg: string, type?: "success" | "error" | "info") => void }) {
+function ChatPanel({ onToast }: { onToast: (msg: string, type?: "success" | "error" | "info") => void }) {
   const [draft, setDraft] = useState("");
+  const [chatMessages, setChatMessages] = useState(initialMessages);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1290,14 +1225,13 @@ function ChatPanel({ messages, pushMessage, members, onToast }: { messages: any[
 
   const sendMessage = () => {
     if (!draft.trim()) return;
-    const authorMember = members?.[0] || {};
     const newMsg = {
       id: `m${Date.now()}`,
-      author: { name: authorMember.user?.name || "User", initials: (authorMember.user?.name || "U")[0].toUpperCase(), color: authorMember.user?.color || "bg-emerald-500" },
+      author: members[0],
       time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
       body: draft.trim(),
     };
-    pushMessage(newMsg);
+    setChatMessages((prev) => [...prev, newMsg]);
     setDraft("");
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
@@ -1309,14 +1243,13 @@ function ChatPanel({ messages, pushMessage, members, onToast }: { messages: any[
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const authorMember = members?.[0] || {};
       const newMsg = {
         id: `m${Date.now()}`,
-        author: { name: authorMember.user?.name || "User", initials: (authorMember.user?.name || "U")[0].toUpperCase(), color: authorMember.user?.color || "bg-emerald-500" },
+        author: members[0],
         time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
         body: `📎 Attached: ${file.name}`,
       };
-      pushMessage(newMsg);
+      setChatMessages((prev) => [...prev, newMsg]);
       onToast(`Attached: ${file.name}`, "success");
     }
     e.target.value = "";
@@ -1329,7 +1262,7 @@ function ChatPanel({ messages, pushMessage, members, onToast }: { messages: any[
         <div className="text-center font-mono text-[10px] uppercase tracking-widest text-zinc-600">
           — today —
         </div>
-        {messages.map((m) => (
+        {chatMessages.map((m) => (
           <div key={m.id} className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1347,6 +1280,14 @@ function ChatPanel({ messages, pushMessage, members, onToast }: { messages: any[
             </p>
           </div>
         ))}
+        <div className="ml-7 flex items-center gap-2 text-[11px] text-zinc-500">
+          <span className="flex gap-0.5">
+            <span className="size-1 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.3s]" />
+            <span className="size-1 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.15s]" />
+            <span className="size-1 animate-bounce rounded-full bg-zinc-500" />
+          </span>
+          Priya is typing…
+        </div>
         <div ref={messagesEndRef} />
       </div>
       <div className="shrink-0 border-t border-zinc-800 p-3">
@@ -1363,23 +1304,38 @@ function ChatPanel({ messages, pushMessage, members, onToast }: { messages: any[
           />
           <div className="flex items-center justify-between border-t border-zinc-800/60 px-2 py-1.5">
             <div className="flex items-center gap-1 text-zinc-500 relative">
-              <button onClick={handleAttach} title="Attach file" className="rounded p-1 hover:bg-zinc-800 hover:text-zinc-200">
+              <button
+                onClick={handleAttach}
+                title="Attach file"
+                className="rounded p-1 hover:bg-zinc-800 hover:text-zinc-200"
+              >
                 <Paperclip className="size-3.5" />
               </button>
-              <button onClick={() => setShowEmojiPicker((v) => !v)} title="Emoji" className="rounded p-1 hover:bg-zinc-800 hover:text-zinc-200">
+              <button
+                onClick={() => setShowEmojiPicker((v) => !v)}
+                title="Emoji"
+                className="rounded p-1 hover:bg-zinc-800 hover:text-zinc-200"
+              >
                 <Smile className="size-3.5" />
               </button>
               {showEmojiPicker && (
                 <div className="absolute bottom-8 left-0 z-10 flex flex-wrap gap-1 rounded-lg border border-zinc-700 bg-zinc-900 p-2 shadow-xl w-44">
                   {EMOJIS.map((emoji) => (
-                    <button key={emoji} onClick={() => { setDraft((d) => d + emoji); setShowEmojiPicker(false); }} className="rounded p-1 text-lg hover:bg-zinc-800">
+                    <button
+                      key={emoji}
+                      onClick={() => { setDraft((d) => d + emoji); setShowEmojiPicker(false); }}
+                      className="rounded p-1 text-lg hover:bg-zinc-800"
+                    >
                       {emoji}
                     </button>
                   ))}
                 </div>
               )}
             </div>
-            <button onClick={sendMessage} className="inline-flex items-center gap-1 rounded bg-brand px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-brand-foreground hover:brightness-110">
+            <button
+              onClick={sendMessage}
+              className="inline-flex items-center gap-1 rounded bg-brand px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-brand-foreground hover:brightness-110"
+            >
               Send <Send className="size-3" />
             </button>
           </div>
@@ -1389,7 +1345,7 @@ function ChatPanel({ messages, pushMessage, members, onToast }: { messages: any[
   );
 }
 
-function MembersPanel({ members, onInvite }: { members: any[], onInvite: () => void }) {
+function MembersPanel({ members, onInvite }: { members: any[]; onInvite: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-zinc-800 p-3">
@@ -1402,9 +1358,15 @@ function MembersPanel({ members, onInvite }: { members: any[], onInvite: () => v
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="px-4 py-3 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-          Members — {members?.length || 0}
+          Online — {members.filter((m) => m.online).length}
         </div>
-        {members?.map((m) => (
+        {members.filter((m) => m.online).map((m) => (
+          <MemberRow key={m.id} member={m} />
+        ))}
+        <div className="px-4 py-3 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+          Offline — {members.filter((m) => !m.online).length}
+        </div>
+        {members.filter((m) => !m.online).map((m) => (
           <MemberRow key={m.id} member={m} />
         ))}
       </div>
@@ -1412,24 +1374,30 @@ function MembersPanel({ members, onInvite }: { members: any[], onInvite: () => v
   );
 }
 
-function MemberRow({ member }: { member: any }) {
+function MemberRow({ member }: { member: typeof members[number] }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02]">
       <div className="relative">
         <span
-          className={`grid size-8 place-items-center rounded-full ${member.user?.color || "bg-emerald-500"} text-xs font-bold text-zinc-950`}
+          className={`grid size-8 place-items-center rounded-full ${member.color} text-xs font-bold text-zinc-950`}
         >
-          {member.user?.name ? member.user.name[0].toUpperCase() : "U"}
+          {member.initials}
         </span>
+        <span
+          className={
+            "absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-surface " +
+            (member.online ? "bg-emerald-500" : "bg-zinc-600")
+          }
+        />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-zinc-100">{member.user?.name || "User"}</p>
-        <p className="truncate font-mono text-[10px] text-zinc-500">{member.user?.email || "Unknown email"}</p>
+        <p className="truncate text-sm font-medium text-zinc-100">{member.name}</p>
+        <p className="truncate font-mono text-[10px] text-zinc-500">@{member.handle}</p>
       </div>
       <span
         className={
           "rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest " +
-          (member.role === "owner"
+          (member.role === "Owner"
             ? "border-brand/30 bg-brand/10 text-brand"
             : "border-zinc-800 bg-zinc-900 text-zinc-500")
         }
@@ -1440,7 +1408,7 @@ function MemberRow({ member }: { member: any }) {
   );
 }
 
-function ActivityPanel({ activity }: { activity: any[] }) {
+function ActivityPanel() {
   return (
     <div className="h-full overflow-y-auto p-4">
       <ol className="relative border-l border-zinc-800 pl-4">
@@ -1545,10 +1513,10 @@ function CommentCard({
           <p className="mt-1 text-xs leading-relaxed text-zinc-300">{c.body}</p>
 
           {/* Replies */}
-          {(c.replies ?? []).map((r: any, i: number) => (
+          {(c.replies ?? []).map((r, i) => (
             <div key={i} className="mt-2 flex items-start gap-2 border-l-2 border-zinc-700 pl-2">
-              <span className={`grid size-5 shrink-0 place-items-center rounded-full bg-emerald-500 text-[9px] font-bold text-zinc-950`}>
-                {"U"}
+              <span className={`grid size-5 shrink-0 place-items-center rounded-full ${members[0].color} text-[9px] font-bold text-zinc-950`}>
+                {members[0].initials}
               </span>
               <p className="text-[11px] text-zinc-400">{r}</p>
             </div>
@@ -1594,7 +1562,7 @@ function HistoryPanel({
   versionHistory,
   onRestore,
 }: {
-  versionHistory: any[];
+  versionHistory: typeof initialVersionHistory;
   onRestore: (label: string) => void;
 }) {
   return (

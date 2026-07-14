@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Star, Plus, Filter, Grid2x2, List, Search, X, Archive, UserPlus } from "lucide-react";
+import { Star, Plus, Filter, Grid2x2, List, Search, X, Archive, UserPlus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -129,6 +129,24 @@ function Dashboard() {
     } catch (err) { console.error(err); }
   };
 
+  const handleDelete = async (e: React.MouseEvent, w: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete "${w.name}"? This action is permanent and cannot be undone.`)) return;
+    try {
+      const res = await fetch(`http://localhost:1234/api/workspaces/${w.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to delete workspace");
+      } else {
+        setAllWorkspaces(prev => prev.filter(ws => ws.id !== w.id));
+      }
+    } catch (err) { console.error(err); }
+  };
+
   const tabCounts: Record<FilterTab, number> = {
     All: allWorkspaces.filter(w => !w.archived).length,
     Starred: allWorkspaces.filter((w) => !w.archived && w.starred).length,
@@ -150,16 +168,27 @@ function Dashboard() {
             try {
               const res = await fetch("http://localhost:1234/api/workspaces", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ name, language: "TypeScript", description: `Template: ${template}` })
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  name,
+                  language: template === "TypeScript API" || template === "React App" ? "TypeScript" : (template === "SQL Schema" ? "SQL" : "Markdown"),
+                  description: `${template} workspace`
+                })
               });
-              if (!res.ok) throw new Error("Failed to create workspace");
+              if (!res.ok) {
+                const errData = await res.json();
+                alert(errData.error || "Failed to create workspace");
+                return;
+              }
               const newWs = await res.json();
               setShowCreateModal(false);
               navigate({ to: "/workspace/$id", params: { id: newWs.id } });
             } catch (err) {
               console.error(err);
-              alert("Failed to create workspace");
+              alert("Error creating workspace");
             }
           }}
         />
@@ -322,6 +351,11 @@ function Dashboard() {
                       <button onClick={(e) => toggleStar(e, w)} className="text-zinc-500 hover:text-amber-400 transition-colors">
                         <Star className={`size-4 ${w.starred ? "fill-amber-400 text-amber-400" : ""}`} />
                       </button>
+                      {w.members && w.members.some((m: any) => m.userId === user?.id && m.role === 'owner') && (
+                        <button onClick={(e) => handleDelete(e, w)} className="text-zinc-500 hover:text-rose-500 transition-colors">
+                          <Trash2 className="size-4" />
+                        </button>
+                      )}
                       <span
                         className={
                           "rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest " +
@@ -344,7 +378,7 @@ function Dashboard() {
                   </div>
                   <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
                     <div className="flex -space-x-1.5">
-                      {w.members.slice(0, 4).map((m: any) => (
+                      {w.members.slice(0, 4).map((m) => (
                         <span
                           key={m.id}
                           className={`grid size-6 place-items-center rounded-full ${m.color} text-[10px] font-bold text-zinc-950 ring-2 ring-panel`}
@@ -404,11 +438,16 @@ function Dashboard() {
                     <button onClick={(e) => toggleStar(e, w)} className="text-zinc-500 hover:text-amber-400 transition-colors">
                       <Star className={`size-4 ${w.starred ? "fill-amber-400 text-amber-400" : ""}`} />
                     </button>
+                    {w.members && w.members.some((m: any) => m.userId === user?.id && m.role === 'owner') && (
+                      <button onClick={(e) => handleDelete(e, w)} className="text-zinc-500 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
+                        <Trash2 className="size-4" />
+                      </button>
+                    )}
                     <span className="font-mono text-[10px] text-zinc-600">
                       {new Date(w.updatedAt).toLocaleDateString()}
                     </span>
                     <div className="flex -space-x-1.5">
-                      {w.members.slice(0, 3).map((m: any) => (
+                      {w.members.slice(0, 3).map((m) => (
                         <span key={m.id} className={`grid size-5 place-items-center rounded-full ${m.color} text-[9px] font-bold text-zinc-950 ring-1 ring-panel`} title={m.name}>
                           {m.initials}
                         </span>

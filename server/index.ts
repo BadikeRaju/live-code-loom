@@ -9,6 +9,7 @@ import * as Y from "yjs";
 import { pool, initDb } from "./db.js";
 import { generateToken, requireAuth } from "./auth.js";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
+import { sendEmail } from "./email.js";
 
 const app = express();
 app.use(cors());
@@ -230,6 +231,28 @@ app.post("/api/workspaces/:id/share", requireAuth, async (req, res) => {
         "INSERT INTO WorkspaceMember (id, role, userId, workspaceId) VALUES (?, 'editor', ?, ?)",
         [memberId, users[0].id, req.params.id]
       );
+
+      // Fetch workspace name to send customized email
+      const [workspaces] = await pool.query<RowDataPacket[]>("SELECT name FROM Workspace WHERE id = ?", [req.params.id]);
+      const workspaceName = workspaces.length > 0 ? workspaces[0].name : "a workspace";
+
+      // Send invitation email
+      await sendEmail({
+        to: email,
+        subject: `Invitation to collaborate on ${workspaceName}`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2>Hello!</h2>
+            <p>You have been invited to collaborate on the workspace <strong>${workspaceName}</strong> on CoFlux.</p>
+            <p>Log in to your account and check your dashboard under the "Shared with me" tab to begin collaborating.</p>
+            <br/>
+            <p><a href="http://localhost:8080/dashboard" style="background-color: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Go to Dashboard</a></p>
+            <br/>
+            <p>Best regards,<br/>The CoFlux Team</p>
+          </div>
+        `
+      });
+
       res.json({ success: true });
     } catch (dbErr: any) {
       if (dbErr.code === 'ER_DUP_ENTRY') {
@@ -242,6 +265,27 @@ app.post("/api/workspaces/:id/share", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+app.delete("/api/workspaces/:id", requireAuth, async (req, res) => {
+  const userId = (req as any).user.id;
+  try {
+    const [members] = await pool.query<RowDataPacket[]>(
+      "SELECT role FROM WorkspaceMember WHERE workspaceId = ? AND userId = ?",
+      [req.params.id, userId]
+    );
+    if (members.length === 0 || members[0].role !== 'owner') {
+      res.status(403).json({ error: "Only the owner can delete the workspace" });
+      return;
+    }
+    await pool.query("DELETE FROM DocumentState WHERE workspaceId = ?", [req.params.id]);
+    await pool.query("DELETE FROM WorkspaceMember WHERE workspaceId = ?", [req.params.id]);
+    await pool.query("DELETE FROM Workspace WHERE id = ?", [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 // --- Notifications API ---
 
