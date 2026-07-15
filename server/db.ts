@@ -100,6 +100,7 @@ export async function initDb() {
       workspaceId VARCHAR(191) NOT NULL,
       filename VARCHAR(191) NOT NULL,
       state LONGBLOB NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY unique_workspace_filename (workspaceId, filename),
       FOREIGN KEY (workspaceId) REFERENCES Workspace(id) ON DELETE CASCADE
@@ -132,6 +133,12 @@ export async function initDb() {
     await pool.query("ALTER TABLE Workspace ADD COLUMN archived BOOLEAN DEFAULT false");
   } catch (err) {
     console.warn("Workspace table columns modify warning (might already exist):", err);
+  }
+
+  try {
+    await pool.query("ALTER TABLE DocumentState ADD COLUMN createdAt DATETIME DEFAULT CURRENT_TIMESTAMP");
+  } catch (err) {
+    // column might already exist
   }
 
   console.log("Database schema initialized.");
