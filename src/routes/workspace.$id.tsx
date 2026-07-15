@@ -1297,6 +1297,17 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
     };
   }, [provider]);
 
+  // Sync authenticated user details to yjs awareness
+  useEffect(() => {
+    if (provider && user) {
+      provider.awareness.setLocalStateField("user", {
+        name: user.name || "Anonymous",
+        color: user.color || "#10b981",
+        avatar: user.avatar,
+      });
+    }
+  }, [provider, user]);
+
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const decorationsRef = useRef<any>(null);
