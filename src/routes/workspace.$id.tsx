@@ -1838,6 +1838,16 @@ function ChatPanel({
     }
   };
 
+  const deleteMessage = (msgId: string) => {
+    if (!ychat) return;
+    const messages = ychat.toArray();
+    const actualIndex = messages.findIndex(m => m.id === msgId);
+    if (actualIndex !== -1) {
+      ychat.delete(actualIndex, 1);
+      onToast("Message deleted", "info");
+    }
+  };
+
   return (
     <div className="flex h-full flex-col relative">
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
@@ -1857,7 +1867,7 @@ function ChatPanel({
           )}
         </div>
         {chatMessages.map((m) => (
-          <div key={m.id} className="flex flex-col gap-1">
+          <div key={m.id} className="flex flex-col gap-1 group relative">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {m.author?.avatar ? (
@@ -1875,9 +1885,20 @@ function ChatPanel({
                 )}
                 <span className="text-xs font-semibold text-zinc-100">{m.author?.name || "User"}</span>
               </div>
-              <span className="font-mono text-[10px] text-zinc-600">{m.time}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-zinc-600">{m.time}</span>
+                {m.author?.id === user?.id && (
+                  <button
+                    onClick={() => deleteMessage(m.id)}
+                    title="Delete message"
+                    className="opacity-0 group-hover:opacity-100 hover:text-red-400 text-zinc-500 transition-all p-0.5 cursor-pointer"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                )}
+              </div>
             </div>
-            <p className="ml-7 rounded-md bg-white/5 p-2 text-xs leading-relaxed text-zinc-300">
+            <p className="ml-7 rounded-md bg-white/5 p-2 text-xs leading-relaxed text-zinc-300 pr-8">
               {m.body}
             </p>
           </div>
