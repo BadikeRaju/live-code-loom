@@ -67,17 +67,7 @@ function Landing() {
         </div>
       </section>
 
-      {/* LOGO STRIP */}
-      <section className="border-y border-zinc-900 bg-zinc-950/50 py-8">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 px-6 font-mono text-xs uppercase tracking-widest text-zinc-600">
-          <span className="text-zinc-500">Trusted by engineering teams at</span>
-          {["Northwind", "Halcyon", "Volt Labs", "Meridian", "Sigma-9", "Argonaut"].map((n) => (
-            <span key={n} className="text-zinc-500">
-              {n}
-            </span>
-          ))}
-        </div>
-      </section>
+
 
       {/* FEATURES */}
       <section id="engine" className="px-6 py-24">
@@ -288,8 +278,8 @@ function MockAppFrame() {
                   (f.active
                     ? "bg-brand/10 text-brand"
                     : f.muted
-                    ? "text-zinc-500"
-                    : "text-zinc-400")
+                      ? "text-zinc-500"
+                      : "text-zinc-400")
                 }
               >
                 {f.name}
