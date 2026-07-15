@@ -156,22 +156,20 @@
 
 /* y-monaco collaborative cursors */
 .yRemoteSelection {
-  background-color: var(--yRemoteSelectionColor, rgba(250, 129, 0, 0.2)) !important;
+  /* Selection background color is injected dynamically */
 }
 
 .yRemoteSelectionHead {
   position: absolute;
   box-sizing: border-box;
-  border-left: 2px solid var(--yRemoteSelectionColor, rgba(250, 129, 0, 1)) !important;
+  border-left: 2px solid !important;
   height: 100%;
 }
 
 .yRemoteSelectionHead::after {
-  content: attr(data-username);
   position: absolute;
   top: -1.4em;
   left: -2px;
-  background-color: var(--yRemoteSelectionColor, rgba(250, 129, 0, 1)) !important;
   color: #09090b !important;
   font-family: var(--font-sans), sans-serif;
   font-size: 10px;

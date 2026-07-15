@@ -1251,6 +1251,52 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
     }
   }, [ytext, filename]);
 
+  // Dynamic CSS injection for remote collaborative cursors and selections
+  useEffect(() => {
+    if (!provider) return;
+
+    const handleAwareness = () => {
+      const states = provider.awareness.getStates();
+      let css = "";
+      
+      states.forEach((state: any, clientId: number) => {
+        if (state.user && state.user.color) {
+          const color = state.user.color;
+          const name = state.user.name || "Collaborator";
+          css += `
+            .yRemoteSelection-${clientId} {
+              background-color: ${color}33 !important;
+            }
+            .yRemoteSelectionHead-${clientId} {
+              border-color: ${color} !important;
+            }
+            .yRemoteSelectionHead-${clientId}::after {
+              content: "${name}" !important;
+              background-color: ${color} !important;
+            }
+          `;
+        }
+      });
+
+      let styleEl = document.getElementById("y-monaco-dynamic-styles");
+      if (!styleEl) {
+        styleEl = document.createElement("style");
+        styleEl.id = "y-monaco-dynamic-styles";
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = css;
+    };
+
+    provider.awareness.on("change", handleAwareness);
+    handleAwareness();
+
+    return () => {
+      provider.awareness.off("change", handleAwareness);
+      const styleEl = document.getElementById("y-monaco-dynamic-styles");
+      if (styleEl) styleEl.textContent = "";
+    };
+  }, [provider]);
+
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const decorationsRef = useRef<any>(null);
