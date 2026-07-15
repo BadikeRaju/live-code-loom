@@ -153,3 +153,33 @@
   width: 5px !important;
   margin-left: 3px;
 }
+
+/* y-monaco collaborative cursors */
+.yRemoteSelection {
+  background-color: var(--yRemoteSelectionColor, rgba(250, 129, 0, 0.2)) !important;
+}
+
+.yRemoteSelectionHead {
+  position: absolute;
+  box-sizing: border-box;
+  border-left: 2px solid var(--yRemoteSelectionColor, rgba(250, 129, 0, 1)) !important;
+  height: 100%;
+}
+
+.yRemoteSelectionHead::after {
+  content: attr(data-username);
+  position: absolute;
+  top: -1.4em;
+  left: -2px;
+  background-color: var(--yRemoteSelectionColor, rgba(250, 129, 0, 1)) !important;
+  color: #09090b !important;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
