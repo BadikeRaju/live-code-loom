@@ -88,6 +88,7 @@ export async function initDb() {
   try {
     await pool.query("ALTER TABLE User MODIFY COLUMN createdAt DATETIME DEFAULT CURRENT_TIMESTAMP");
     await pool.query("ALTER TABLE User MODIFY COLUMN updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+    await pool.query("ALTER TABLE User MODIFY COLUMN avatar LONGTEXT");
   } catch (err) {
     console.warn("User table columns modify warning:", err);
   }

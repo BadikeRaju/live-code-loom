@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
-import { MonacoBinding } from "y-monaco";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -44,6 +43,7 @@ import {
   Heading2,
   FolderPlus,
   FilePlus,
+  Pencil,
 } from "lucide-react";
 type FileNode = {
   name: string;
@@ -57,11 +57,16 @@ const fileTree: FileNode[] = [];
 const activity: any[] = [];
 const initialMessages: any[] = [];
 const initialVersionHistory: any[] = [];
+// --- Helpers for Base64 encoding Uint8Arrays (Yjs positions) ---
+const toBase64 = (arr: Uint8Array) => btoa(Array.from(arr).map(b => String.fromCharCode(b)).join(""));
+const fromBase64 = (str: string) => new Uint8Array(atob(str).split("").map(c => c.charCodeAt(0)));
+
 const initialComments: any[] = [];
 const members: any[] = [
   { id: "fallback", name: "User", handle: "user", initials: "U", color: "bg-zinc-700", role: "Owner", online: true }
 ];
 import { LogoMark } from "@/components/site-header";
+import { MentionTextarea, parseMentions } from "../components/MentionTextarea";
 
 export const Route = createFileRoute("/workspace/$id")({
   head: ({ params }) => ({
@@ -88,7 +93,7 @@ export const Route = createFileRoute("/workspace/$id")({
 
 type Tab = { id: string; name: string; kind: "code" | "docs"; dirty?: boolean };
 type Toast = { id: string; message: string; type: "success" | "error" | "info" };
-type CommentType = typeof initialComments[number] & { replies?: string[] };
+type CommentData = { id: string; author: any; content: string; resolved: boolean; createdAt: number; replies?: any[]; startPos: any; endPos: any };
 
 /* ---- Minimal toast system ---- */
 function useToast() {
@@ -134,16 +139,75 @@ function WorkspacePage() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
 
-  // Comments state (mutable)
-  const [comments, setComments] = useState<CommentType[]>(
-    initialComments.map((c) => ({ ...c, replies: [] }))
-  );
+  // Comments state
+  const [comments, setComments] = useState<CommentData[]>([]);
+  const [pendingComment, setPendingComment] = useState<{ start: string, end: string } | null>(null);
 
   // Version history state (mutable)
   const [versionHistory, setVersionHistory] = useState(initialVersionHistory);
 
   // File tree state (mutable for new file/folder)
   const [tree, setTree] = useState<FileNode[]>(fileTree);
+
+  // Reconstruct tree from workspace.files
+  useEffect(() => {
+    if (workspace && workspace.files && workspace.files.length > 0) {
+      const buildTree = (paths: string[]): FileNode[] => {
+        const root: FileNode[] = [];
+        
+        paths.forEach(path => {
+          const parts = path.split('/');
+          let currentLevel = root;
+          let currentPath = '';
+
+          parts.forEach((part, index) => {
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            const isFile = index === parts.length - 1;
+            
+            let existingNode = currentLevel.find(n => n.name === part);
+            
+            if (!existingNode) {
+              existingNode = {
+                id: currentPath,
+                name: part,
+                type: isFile ? "file" : "folder",
+                ...(isFile ? { 
+                  language: part.endsWith('.md') ? 'Markdown' : 
+                            part.endsWith('.json') ? 'JSON' : 
+                            part.endsWith('.py') ? 'Python' :
+                            part.endsWith('.java') ? 'Java' :
+                            part.endsWith('.c') || part.endsWith('.h') ? 'C' :
+                            part.endsWith('.sql') ? 'SQL' : 'TypeScript' 
+                } : { children: [] })
+              };
+              currentLevel.push(existingNode);
+            }
+            
+            if (!isFile && existingNode.children) {
+              currentLevel = existingNode.children;
+            }
+          });
+        });
+        
+        return root;
+      };
+      
+      const newTree = buildTree(workspace.files);
+      setTree(newTree);
+
+      // Open the first file by default if tabs are empty or still the mock ones
+      if (tabs.length === 2 && tabs[0].id === "src/index.ts") {
+        const firstFile = workspace.files[0];
+        setTabs([{ 
+          id: firstFile, 
+          name: firstFile.split('/').pop() || firstFile, 
+          kind: firstFile.endsWith('.md') ? 'docs' : 'code',
+          dirty: false
+        }]);
+        setActive(firstFile);
+      }
+    }
+  }, [workspace]);
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -211,26 +275,6 @@ function WorkspacePage() {
     }, 1000);
   };
 
-  // Resolve comment
-  const resolveComment = (id: string) => {
-    setComments((prev) => prev.map((c) => c.id === id ? { ...c, resolved: true } : c));
-    show("Comment resolved", "success");
-  };
-
-  // Reply to comment
-  const replyToComment = (id: string, text: string) => {
-    setComments((prev) => prev.map((c) =>
-      c.id === id ? { ...c, replies: [...(c.replies ?? []), text] } : c
-    ));
-    show("Reply added", "success");
-  };
-
-  // Restore version
-  const restoreVersion = (label: string) => {
-    show(`Restoring ${label}…`, "info");
-    setTimeout(() => show(`✓ Restored to ${label}`, "success"), 1200);
-  };
-
   // Recursively add a node inside a parent folder (or root if no parentId)
   const addToTree = (name: string, type: "file" | "folder", parentId?: string) => {
     const lang = name.endsWith(".md") ? "Markdown" : name.endsWith(".json") ? "JSON" : "TypeScript";
@@ -255,6 +299,84 @@ function WorkspacePage() {
       setActive(id);
     }
     show(`✓ Created ${type} "${name}"`, "success");
+  };
+
+  const handleRenameNode = (oldId: string, newName: string) => {
+    if (!newName.trim()) return;
+
+    let targetNode: FileNode | undefined;
+    
+    // Find node first
+    const findNode = (nodes: FileNode[]): boolean => {
+      for (const n of nodes) {
+        if (n.id === oldId) {
+          targetNode = n;
+          return true;
+        }
+        if (n.children && findNode(n.children)) return true;
+      }
+      return false;
+    };
+    findNode(tree);
+    if (!targetNode) return;
+    
+    const oldName = targetNode.name;
+    if (oldName === newName) return;
+
+    const parts = oldId.split('/');
+    parts.pop();
+    const parentPath = parts.join('/');
+    const newId = parentPath ? `${parentPath}/${newName}` : newName;
+
+    // Update tree recursively
+    const updateTree = (nodes: FileNode[]): FileNode[] => {
+      return nodes.map(n => {
+        if (n.id === oldId) {
+          // If it's a folder, we'd also need to update all children IDs recursively
+          // For simplicity here we just update the node itself and do a recursive ID update
+          const updateChildrenIds = (children: FileNode[], oldParentId: string, newParentId: string): FileNode[] => {
+            return children.map(c => {
+              const newChildId = c.id.replace(oldParentId, newParentId);
+              return {
+                ...c,
+                id: newChildId,
+                children: c.children ? updateChildrenIds(c.children, oldParentId, newParentId) : undefined
+              };
+            });
+          };
+
+          return { 
+            ...n, 
+            name: newName, 
+            id: newId,
+            children: n.children ? updateChildrenIds(n.children, oldId, newId) : undefined
+          };
+        }
+        if (n.children) return { ...n, children: updateTree(n.children) };
+        return n;
+      });
+    };
+
+    setTree(prev => updateTree(prev));
+
+    // Update active tab and all open tabs
+    setTabs(prev => prev.map(t => {
+      if (t.id.startsWith(oldId)) {
+        const updatedId = t.id.replace(oldId, newId);
+        return { 
+          ...t, 
+          id: updatedId, 
+          name: t.id === oldId ? newName : t.name 
+        };
+      }
+      return t;
+    }));
+    
+    if (active.startsWith(oldId)) {
+      setActive(active.replace(oldId, newId));
+    }
+    
+    show(`✓ Renamed "${oldName}" to "${newName}"`, "success");
   };
 
   const workspaceMembers = useMemo(() => {
@@ -378,7 +500,6 @@ function WorkspacePage() {
       </header>
 
       {/* Modals */}
-      {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onInvite={handleInvite} />}
       {showSearchModal && <WorkspaceSearchModal tree={tree} onClose={() => setShowSearchModal(false)} onOpen={openFile} />}
 
       {/* Body */}
@@ -432,7 +553,34 @@ function WorkspacePage() {
             <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
               {activeTab ? (
                 activeTab.kind === "code" ? (
-                  <CodeEditor filename={activeTab.name} workspaceId={workspace.id} />
+                  <CodeEditor 
+                    key={activeTab.id} 
+                    filename={activeTab.id} 
+                    workspaceId={workspace.id} 
+                    onCommentsChange={setComments}
+                    onResolveComment={(id) => {
+                      const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
+                      const map = doc.getMap<CommentData>("comments");
+                      const existing = map.get(id);
+                      if (existing) map.set(id, { ...existing, resolved: true });
+                    }}
+                    onReplyComment={(id, text) => {
+                      const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
+                      const map = doc.getMap<CommentData>("comments");
+                      const existing = map.get(id);
+                      if (existing) {
+                        map.set(id, {
+                          ...existing,
+                          replies: [...(existing.replies || []), { author: { id: user?.id, name: user?.name || "User", color: user?.color, avatar: user?.avatar }, content: text, createdAt: Date.now() }],
+                        });
+                      }
+                    }}
+                    onRequestComment={(pos) => {
+                      setPendingComment(pos);
+                      setRightSidebarOpen(true);
+                      setRightTab("comments");
+                    }}
+                  />
                 ) : (
                   <DocsEditor filename={activeTab.name} />
                 )
@@ -464,9 +612,53 @@ function WorkspacePage() {
               active={rightTab}
               comments={comments}
               versionHistory={versionHistory}
-              onResolveComment={resolveComment}
-              onReplyComment={replyToComment}
-              onRestoreVersion={restoreVersion}
+              onResolveComment={(id) => {
+                if (!activeTab) return;
+                const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
+                const map = doc.getMap<CommentData>("comments");
+                const existing = map.get(id);
+                if (existing) {
+                  map.set(id, { ...existing, resolved: true });
+                }
+              }}
+              onReplyComment={(id, text) => {
+                if (!activeTab) return;
+                const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
+                const map = doc.getMap<CommentData>("comments");
+                const existing = map.get(id);
+                if (existing) {
+                  map.set(id, {
+                    ...existing,
+                    replies: [
+                      ...(existing.replies || []),
+                      {
+                        author: { id: user?.id, name: user?.name || "User", color: user?.color, avatar: user?.avatar },
+                        content: text,
+                        createdAt: Date.now()
+                      }
+                    ],
+                  });
+                }
+              }}
+              onAddComment={(text) => {
+                if (!pendingComment || !activeTab) return;
+                const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
+                const map = doc.getMap<CommentData>("comments");
+                const id = Math.random().toString(36).slice(2);
+                map.set(id, {
+                  id,
+                  author: { id: user?.id, name: user?.name || "User", color: user?.color, avatar: user?.avatar },
+                  content: text,
+                  resolved: false,
+                  createdAt: Date.now(),
+                  replies: [],
+                  startPos: pendingComment.start,
+                  endPos: pendingComment.end,
+                });
+                setPendingComment(null);
+              }}
+              pendingComment={pendingComment}
+              onRestoreVersion={handleCommit}
               onInvite={() => setShowInviteModal(true)}
               onToast={show}
               members={workspaceMembers}
@@ -568,7 +760,6 @@ function InviteModal({ onClose, onInvite }: { onClose: () => void; onInvite: (em
 function WorkspaceSearchModal({ tree, onClose, onOpen }: { tree: FileNode[]; onClose: () => void; onOpen: (n: FileNode) => void }) {
   const [query, setQuery] = useState("");
   
-  // flatten tree for searching
   const flatten = (nodes: FileNode[]): FileNode[] => {
     let result: FileNode[] = [];
     for (const n of nodes) {
@@ -695,7 +886,6 @@ function LeftSidebar({
         </button>
       </div>
 
-      {/* Inline new node input */}
       {newNodePrompt && (
         <div className="mx-3 mt-2 flex items-center gap-1">
           <input
@@ -771,17 +961,19 @@ function TreeList({
   activeFile,
   onOpen,
   onAddToFolder,
+  onRename,
 }: {
   nodes: FileNode[];
   depth: number;
   activeFile: string;
   onOpen: (n: FileNode) => void;
   onAddToFolder: (name: string, type: "file" | "folder", parentId?: string) => void;
+  onRename: (oldId: string, newName: string) => void;
 }) {
   return (
     <ul className="flex flex-col gap-0.5">
       {nodes.map((n) => (
-        <TreeNode key={n.id} node={n} depth={depth} activeFile={activeFile} onOpen={onOpen} onAddToFolder={onAddToFolder} />
+        <TreeNode key={n.id} node={n} depth={depth} activeFile={activeFile} onOpen={onOpen} onAddToFolder={onAddToFolder} onRename={onRename} />
       ))}
     </ul>
   );
@@ -793,17 +985,21 @@ function TreeNode({
   activeFile,
   onOpen,
   onAddToFolder,
+  onRename,
 }: {
   node: FileNode;
   depth: number;
   activeFile: string;
   onOpen: (n: FileNode) => void;
   onAddToFolder: (name: string, type: "file" | "folder", parentId?: string) => void;
+  onRename: (oldId: string, newName: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [adding, setAdding] = useState<null | "file" | "folder">(null);
+  const [editing, setEditing] = useState(false);
   const [newName, setNewName] = useState("");
   const addInputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const isActive = node.id === activeFile;
   const isFolder = node.type === "folder";
 
@@ -818,6 +1014,13 @@ function TreeNode({
     }
     setAdding(null);
     setNewName("");
+  };
+
+  const submitEdit = () => {
+    if (newName.trim()) {
+      onRename(node.id, newName.trim());
+    }
+    setEditing(false);
   };
 
   return (
@@ -856,32 +1059,56 @@ function TreeNode({
               )}
             </>
           )}
-          <span className="truncate">{node.name}</span>
+          {editing ? (
+            <input
+              ref={editInputRef}
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onBlur={submitEdit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitEdit();
+                if (e.key === "Escape") setEditing(false);
+              }}
+              className="h-5 w-full min-w-0 flex-1 rounded bg-zinc-900 px-1 text-[13px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-brand"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="truncate">{node.name}</span>
+          )}
         </button>
-        {/* Folder inline action buttons — show on hover */}
-        {isFolder && (
-          <div className="flex shrink-0 items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={(e) => { e.stopPropagation(); setAdding("file"); setNewName(""); setOpen(true); }}
-              title="New file in folder"
-              className="grid size-5 place-items-center rounded text-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
-            >
-              <FilePlus className="size-3" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setAdding("folder"); setNewName(""); setOpen(true); }}
-              title="New subfolder"
-              className="grid size-5 place-items-center rounded text-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
-            >
-              <FolderPlus className="size-3" />
-            </button>
-          </div>
-        )}
+        <div className="flex shrink-0 items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => { e.stopPropagation(); setNewName(node.name); setEditing(true); }}
+            title="Rename"
+            className="grid size-5 place-items-center rounded text-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
+          >
+            <Pencil className="size-3" />
+          </button>
+          {isFolder && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); setAdding("file"); setNewName(""); setOpen(true); }}
+                title="New file in folder"
+                className="grid size-5 place-items-center rounded text-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
+              >
+                <FilePlus className="size-3" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setAdding("folder"); setNewName(""); setOpen(true); }}
+                title="New subfolder"
+                className="grid size-5 place-items-center rounded text-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
+              >
+                <FolderPlus className="size-3" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
       {isFolder && open && (
         <>
           {node.children && (
-            <TreeList nodes={node.children} depth={depth + 1} activeFile={activeFile} onOpen={onOpen} onAddToFolder={onAddToFolder} />
+            <TreeList nodes={node.children} depth={depth + 1} activeFile={activeFile} onOpen={onOpen} onAddToFolder={onAddToFolder} onRename={onRename} />
           )}
           {adding && (
             <li style={{ paddingLeft: 6 + (depth + 1) * 12 }} className="flex items-center gap-1 py-0.5 pr-2">
@@ -994,51 +1221,203 @@ const defaultContent = (filename: string) => {
   return `// Start coding in ${filename}...\n`;
 };
 
-function CodeEditor({ filename, workspaceId }: { filename: string; workspaceId: string }) {
+function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment, onResolveComment, onReplyComment }: { filename: string; workspaceId: string; onCommentsChange: (c: CommentData[]) => void; onRequestComment: (p: { start: string, end: string }) => void; onResolveComment?: (id: string) => void; onReplyComment?: (id: string, text: string) => void; }) {
   const { user } = useAuth();
   
   const language = filename.endsWith(".ts") || filename.endsWith(".tsx") ? "typescript"
     : filename.endsWith(".json") ? "json"
     : filename.endsWith(".md") ? "markdown"
+    : filename.endsWith(".py") ? "python"
+    : filename.endsWith(".java") ? "java"
+    : filename.endsWith(".c") || filename.endsWith(".h") ? "c"
+    : filename.endsWith(".sql") ? "sql"
+    : filename.endsWith(".css") ? "css"
+    : filename.endsWith(".html") ? "html"
     : "javascript";
 
   const { doc, provider } = useMemo(() => getWorkspaceDoc(workspaceId, filename, user), [workspaceId, filename, user]);
   const ytext = useMemo(() => doc.getText(filename), [doc, filename]);
   
-  // Initialize with default content if empty
   useEffect(() => {
     if (ytext.toString().length === 0) {
       ytext.insert(0, defaultContent(filename));
     }
   }, [ytext, filename]);
 
+  const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+  const decorationsRef = useRef<any>(null);
+  const decoToCommentMapRef = useRef<Map<string, string>>(new Map());
+
+  const [activeInlineComment, setActiveInlineComment] = useState<{ id: string, top: number, left: number } | null>(null);
+  const [isEditorMounted, setIsEditorMounted] = useState(false);
+
+  const ycomments = useMemo(() => doc.getMap<CommentData>("comments"), [doc]);
+
+  useEffect(() => {
+    const updateComments = () => {
+      onCommentsChange(Array.from(ycomments.values()));
+    };
+    ycomments.observe(updateComments);
+    updateComments();
+    return () => ycomments.unobserve(updateComments);
+  }, [ycomments, onCommentsChange]);
+
+  useEffect(() => {
+    if (!editorRef.current || !decorationsRef.current || !monacoRef.current || !isEditorMounted) return;
+    
+    const updateDecorations = () => {
+      const editor = editorRef.current;
+      const model = editor.getModel();
+      if (!model) return;
+
+      const newDecorations: any[] = [];
+      const commentIds: string[] = [];
+      
+      ycomments.forEach((c) => {
+        if (c.resolved || !c.startPos || !c.endPos) return;
+        
+        try {
+          let startPosArr: Uint8Array;
+          if (typeof c.startPos === "string") startPosArr = fromBase64(c.startPos);
+          else startPosArr = c.startPos instanceof Uint8Array ? c.startPos : new Uint8Array(Object.values(c.startPos || {}));
+          
+          let endPosArr: Uint8Array;
+          if (typeof c.endPos === "string") endPosArr = fromBase64(c.endPos);
+          else endPosArr = c.endPos instanceof Uint8Array ? c.endPos : new Uint8Array(Object.values(c.endPos || {}));
+
+          const startAbs = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(startPosArr), doc);
+          const endAbs = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(endPosArr), doc);
+          if (startAbs && endAbs) {
+            const start = model.getPositionAt(startAbs.index);
+            const end = model.getPositionAt(endAbs.index);
+            newDecorations.push({
+              range: new monacoRef.current.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+              options: {
+                className: "comment-highlight",
+                inlineClassName: "comment-highlight",
+                linesDecorationsClassName: "comment-margin-icon",
+                hoverMessage: { value: `**${c.author?.name || "User"}**: ${c.content}\n\n*Click to reply or resolve*` },
+              }
+            });
+            commentIds.push(c.id);
+          }
+        } catch (e) {
+          console.error("Failed to decode comment relative position:", e);
+        }
+      });
+      const decoIds = decorationsRef.current.set(newDecorations);
+      decoToCommentMapRef.current = new Map(decoIds.map((id: string, i: number) => [id, commentIds[i]]));
+    };
+
+    ycomments.observe(updateDecorations);
+    ytext.observe(updateDecorations);
+    updateDecorations();
+    
+    return () => {
+      ycomments.unobserve(updateDecorations);
+      ytext.unobserve(updateDecorations);
+    };
+  }, [ycomments, ytext, doc, isEditorMounted]);
+
   const handleEditorMount = (editor: any, monaco: any) => {
-    new MonacoBinding(ytext, editor.getModel(), new Set([editor]), provider.awareness);
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    decorationsRef.current = editor.createDecorationsCollection();
+    setIsEditorMounted(true);
+    
+    import("y-monaco").then(({ MonacoBinding }) => {
+      new MonacoBinding(ytext, editor.getModel(), new Set([editor]), provider.awareness);
+    }).catch(console.error);
+
+    editor.addAction({
+      id: "add-comment",
+      label: "Add Comment",
+      contextMenuGroupId: "navigation",
+      contextMenuOrder: 1.5,
+      run: (ed: any) => {
+        const selection = ed.getSelection();
+        if (selection && !selection.isEmpty()) {
+          const model = ed.getModel();
+          const startOffset = model.getOffsetAt(selection.getStartPosition());
+          const endOffset = model.getOffsetAt(selection.getEndPosition());
+          
+          const startRel = Y.createRelativePositionFromTypeIndex(ytext, startOffset);
+          const endRel = Y.createRelativePositionFromTypeIndex(ytext, endOffset);
+          
+          if (onRequestComment) {
+            onRequestComment({
+              start: toBase64(Y.encodeRelativePosition(startRel)),
+              end: toBase64(Y.encodeRelativePosition(endRel))
+            });
+          }
+        }
+      }
+    });
+
+    editor.onMouseDown((e: any) => {
+      const target = e.target;
+      if (target.type === monacoRef.current.editor.MouseTargetType.CONTENT_TEXT) {
+        const position = target.position;
+        const decorations = editor.getModel().getDecorationsInRange(new monacoRef.current.Range(position.lineNumber, position.column, position.lineNumber, position.column));
+        
+        const commentDeco = decorations.find((d: any) => d.options.inlineClassName?.includes('comment-highlight'));
+        if (commentDeco) {
+          const commentId = decoToCommentMapRef.current.get(commentDeco.id);
+          if (commentId) {
+            const coords = editor.getScrolledVisiblePosition(position);
+            if (!coords) return;
+            const domNode = editor.getDomNode();
+            const rect = domNode.getBoundingClientRect();
+            setActiveInlineComment({
+              id: commentId,
+              top: rect.top + coords.top + coords.height + 5,
+              left: rect.left + coords.left,
+            });
+            return;
+          }
+        }
+      }
+      
+      // Close on clicking outside
+      setActiveInlineComment(null);
+    });
   };
 
+  const activeCommentObj = activeInlineComment ? Array.from(ycomments.values()).find(c => c.id === activeInlineComment.id) : null;
+
   return (
-    <div className="flex h-full w-full flex-col bg-panel">
-      <div className="h-full w-full py-2">
-        <Editor
-          height="100%"
-          language={language}
-          theme="vs-dark"
-          onMount={handleEditorMount}
-          options={{
-            minimap: { enabled: true },
-            fontSize: 13,
-            fontFamily: "var(--font-mono)",
-            lineHeight: 24,
-            padding: { top: 16 },
-            scrollBeyondLastLine: false,
-            smoothScrolling: true,
-            cursorBlinking: "smooth",
-            cursorSmoothCaretAnimation: "on",
-            formatOnPaste: true,
-          }}
-          loading={<div className="grid h-full place-items-center text-zinc-500 text-xs font-mono">Loading editor…</div>}
-        />
-      </div>
+    <div className="h-full w-full py-2 relative">
+      <Editor
+        height="100%"
+        language={language}
+        theme="vs-dark"
+        onMount={handleEditorMount}
+        options={{
+          minimap: { enabled: true },
+          fontSize: 13,
+          fontFamily: "'JetBrains Mono', monospace",
+          wordWrap: "on",
+          lineHeight: 24,
+          padding: { top: 16 },
+        }}
+        loading={<div className="grid h-full place-items-center text-zinc-500 text-xs font-mono">Loading editor…</div>}
+      />
+      {activeInlineComment && activeCommentObj && (
+        <div 
+          className="fixed z-50 w-80 shadow-2xl shadow-black rounded-md overflow-hidden bg-surface border border-zinc-700" 
+          style={{ top: activeInlineComment.top, left: activeInlineComment.left }}
+        >
+          <CommentCard 
+            c={activeCommentObj} 
+            onResolve={(id) => {
+              onResolveComment?.(id);
+              setActiveInlineComment(null);
+            }} 
+            onReply={(id, text) => onReplyComment?.(id, text)} 
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1078,7 +1457,6 @@ function DocsEditor({ filename }: { filename: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-panel">
-      {/* Toolbar */}
       <div className="flex h-9 shrink-0 items-center gap-0.5 border-b border-zinc-800 bg-surface/50 px-3 text-xs text-zinc-400 overflow-x-auto">
         {FORMATTING_BUTTONS.map((btn) => (
           <button
@@ -1094,7 +1472,6 @@ function DocsEditor({ filename }: { filename: string }) {
           <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" /> 3 editing
         </div>
       </div>
-      {/* Editable textarea */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <textarea
           ref={textareaRef}
@@ -1167,14 +1544,14 @@ function CommitBar({ onCommit }: { onCommit: (msg: string, andPush: boolean) => 
 
 /* ----------------- Right panel ----------------- */
 
-type CommentData = typeof initialComments[number] & { replies?: string[] };
-
 function RightPanel({
   active,
   comments,
   versionHistory,
   onResolveComment,
   onReplyComment,
+  onAddComment,
+  pendingComment,
   onRestoreVersion,
   onInvite,
   onToast,
@@ -1182,9 +1559,11 @@ function RightPanel({
 }: {
   active: "members" | "chat" | "activity" | "comments" | "history";
   comments: CommentData[];
-  versionHistory: typeof initialVersionHistory;
+  versionHistory: any[];
   onResolveComment: (id: string) => void;
   onReplyComment: (id: string, text: string) => void;
+  onAddComment: (text: string) => void;
+  pendingComment: any;
   onRestoreVersion: (label: string) => void;
   onInvite: () => void;
   onToast: (msg: string, type?: "success" | "error" | "info") => void;
@@ -1202,8 +1581,11 @@ function RightPanel({
         {active === "comments" && (
           <CommentsPanel
             comments={comments}
+            pendingComment={pendingComment}
             onResolve={onResolveComment}
             onReply={onReplyComment}
+            onAdd={onAddComment}
+            onCancelPending={() => {}}
           />
         )}
         {active === "history" && (
@@ -1432,13 +1814,23 @@ function ActivityPanel() {
 
 function CommentsPanel({
   comments,
+  pendingComment,
   onResolve,
   onReply,
+  onAdd,
+  onCancelPending,
 }: {
   comments: CommentData[];
+  pendingComment: any;
   onResolve: (id: string) => void;
   onReply: (id: string, text: string) => void;
+  onAdd: (text: string) => void;
+  onCancelPending: () => void;
 }) {
+  const [draft, setDraft] = useState("");
+  const sortedComments = useMemo(() => {
+    return [...comments].sort((a, b) => b.createdAt - a.createdAt);
+  }, [comments]);
   const grouped = useMemo(() => ({
     open: comments.filter((c) => !c.resolved),
     resolved: comments.filter((c) => c.resolved),
@@ -1446,6 +1838,40 @@ function CommentsPanel({
 
   return (
     <div className="h-full overflow-y-auto">
+      {pendingComment && (
+        <div className="border-b border-zinc-800 p-4">
+          <h3 className="mb-2 text-xs font-semibold text-zinc-200">New Comment</h3>
+          <div className="flex gap-2">
+            <div className="mt-1 flex-1">
+              <MentionTextarea
+                autoFocus
+                value={draft}
+                onChange={setDraft}
+                onSubmit={() => { onAdd(draft); setDraft(""); }}
+                members={members}
+                placeholder="Write a comment… (Use @ to mention)"
+                className="w-full resize-none rounded border border-zinc-700 bg-panel px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-brand focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="mt-2 flex justify-end gap-2">
+            <button onClick={onCancelPending} className="text-[10px] text-zinc-500 hover:text-zinc-300">Cancel</button>
+            <button
+              onClick={() => {
+                if (draft.trim()) {
+                  onAdd(draft);
+                  setDraft("");
+                } else {
+                  onCancelPending();
+                }
+              }}
+              className="rounded bg-brand px-2 py-1 text-[10px] font-medium text-brand-foreground hover:brightness-110"
+            >
+              Submit
+            </button>
+          </div>
+        </div>
+      )}
       <div className="border-b border-zinc-800 px-4 py-3 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
         Open — {grouped.open.length}
       </div>
@@ -1487,7 +1913,7 @@ function CommentCard({
     <div className={"border-b border-zinc-800 p-4 " + (muted ? "opacity-60" : "")}>
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-[10px] text-zinc-500">
-          {c.file}:{c.line}
+          Code Selection
         </span>
         {c.resolved ? (
           <span className="inline-flex items-center gap-1 rounded bg-brand/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-brand">
@@ -1500,25 +1926,36 @@ function CommentCard({
         )}
       </div>
       <div className="flex items-start gap-2.5">
-        <span
-          className={`grid size-6 shrink-0 place-items-center rounded-full ${c.author.color} text-[10px] font-bold text-zinc-950`}
-        >
-          {c.author.initials}
-        </span>
+        {c.author?.avatar ? (
+          <img src={c.author.avatar} alt="Avatar" className="size-6 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span
+            className={`grid size-6 shrink-0 place-items-center rounded-full ${c.author?.color || "bg-zinc-700"} text-[10px] font-bold text-zinc-950`}
+          >
+            {c.author?.name?.charAt(0) || "U"}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-zinc-100">{c.author.name}</span>
-            <span className="font-mono text-[10px] text-zinc-600">{c.when}</span>
+            <span className="text-xs font-semibold text-zinc-100">{c.author?.name || "Anonymous"}</span>
+            <span className="font-mono text-[10px] text-zinc-600">{new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-300">{c.body}</p>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-300">{parseMentions(c.content)}</p>
 
           {/* Replies */}
           {(c.replies ?? []).map((r, i) => (
             <div key={i} className="mt-2 flex items-start gap-2 border-l-2 border-zinc-700 pl-2">
-              <span className={`grid size-5 shrink-0 place-items-center rounded-full ${members[0].color} text-[9px] font-bold text-zinc-950`}>
-                {members[0].initials}
-              </span>
-              <p className="text-[11px] text-zinc-400">{r}</p>
+              {r.author?.avatar ? (
+                <img src={r.author.avatar} alt="Avatar" className="size-5 shrink-0 rounded-full object-cover" />
+              ) : (
+                <span className={`grid size-5 shrink-0 place-items-center rounded-full ${r.author?.color || "bg-zinc-700"} text-[9px] font-bold text-zinc-950`}>
+                  {r.author?.name?.charAt(0) || "U"}
+                </span>
+              )}
+              <div className="flex-1">
+                <p className="text-[11px] font-semibold text-zinc-300">{r.author?.name || "Anonymous"}</p>
+                <p className="text-[11px] text-zinc-400">{parseMentions(r.content)}</p>
+              </div>
             </div>
           ))}
 
@@ -1541,15 +1978,21 @@ function CommentCard({
 
           {replying && (
             <div className="mt-2 flex gap-1">
-              <input
+              <MentionTextarea
                 autoFocus
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="Write a reply…"
-                className="h-7 flex-1 rounded border border-zinc-700 bg-panel px-2 text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:border-brand focus:outline-none"
-                onKeyDown={(e) => { if (e.key === "Enter") submitReply(); if (e.key === "Escape") setReplying(false); }}
+                onChange={setReplyText}
+                onSubmit={submitReply}
+                members={members}
+                placeholder="Write a reply… (@mention)"
+                className="h-7 w-full rounded border border-zinc-700 bg-panel px-2 py-1 text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:border-brand focus:outline-none"
               />
-              <button onClick={submitReply} className="rounded bg-brand px-2 py-1 text-[10px] font-bold text-brand-foreground hover:brightness-110">Send</button>
+              <button
+                onClick={submitReply}
+                className="rounded bg-brand px-2 py-1 text-[10px] font-bold text-brand-foreground hover:brightness-110"
+              >
+                Send
+              </button>
             </div>
           )}
         </div>

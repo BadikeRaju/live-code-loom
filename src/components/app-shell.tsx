@@ -148,9 +148,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             to="/settings"
             className="mt-3 flex items-center gap-2 rounded-md border border-zinc-800 bg-panel p-2 hover:bg-zinc-900 transition-colors"
           >
-            <span className="grid size-7 shrink-0 place-items-center rounded-full text-[10px] font-bold text-zinc-950" style={{ backgroundColor: user?.color || "#10b981" }}>
-              {user?.name?.slice(0, 2).toUpperCase() || "AM"}
-            </span>
+            {user?.avatar ? (
+              <img src={user.avatar} alt="Avatar" className="size-7 shrink-0 rounded-full object-cover" />
+            ) : (
+              <span className="grid size-7 shrink-0 place-items-center rounded-full text-[10px] font-bold text-zinc-950" style={{ backgroundColor: user?.color || "#10b981" }}>
+                {user?.name?.slice(0, 2).toUpperCase() || "AM"}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-zinc-100">{user?.name || "Alex Morgan"}</p>
               <p className="truncate text-[10px] text-zinc-500">{user?.email || "alex@halcyon.dev"}</p>
@@ -265,11 +269,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div ref={profileRef} className="relative">
               <button
                 onClick={() => setShowProfile((v) => !v)}
-                className="grid size-8 place-items-center rounded-full text-xs font-bold text-zinc-950 hover:ring-2 hover:ring-brand transition-all"
-                style={{ backgroundColor: user?.color || "#10b981" }}
+                className={`grid size-8 place-items-center rounded-full ${!user?.avatar ? 'text-xs font-bold text-zinc-950' : ''} hover:ring-2 hover:ring-brand transition-all`}
+                style={!user?.avatar ? { backgroundColor: user?.color || "#10b981" } : undefined}
                 title={user?.name || "Alex Morgan"}
               >
-                {user?.name?.slice(0, 2).toUpperCase() || "AM"}
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="Avatar" className="size-full rounded-full object-cover" />
+                ) : (
+                  user?.name?.slice(0, 2).toUpperCase() || "AM"
+                )}
               </button>
               {showProfile && (
                 <div className="absolute right-0 top-10 z-50 w-52 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden">

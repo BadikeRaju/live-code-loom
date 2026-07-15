@@ -5,6 +5,7 @@ interface User {
   email: string;
   name: string;
   color: string;
+  avatar?: string;
 }
 
 interface AuthContextType {
@@ -12,6 +13,7 @@ interface AuthContextType {
   token: string | null;
   login: (token: string, user: User) => void;
   logout: () => void;
+  setAvatar: (avatar: string) => void;
   isLoading: boolean;
 }
 
@@ -56,8 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const setAvatar = (avatar: string) => {
+    setUser(prev => prev ? { ...prev, avatar } : null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, setAvatar, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

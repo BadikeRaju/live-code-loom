@@ -13,7 +13,7 @@ import { sendEmail } from "./email.js";
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // --- Authentication API ---
 
@@ -45,7 +45,7 @@ app.post("/api/register", async (req, res) => {
       [id, email, hashedPassword, displayName, color]
     );
 
-    res.json({ token: generateToken(id), user: { id, email, name: displayName, color } });
+    res.json({ token: generateToken(id), user: { id, email, name: displayName, color, avatar: null } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });
@@ -65,7 +65,7 @@ app.post("/api/login", async (req, res) => {
       res.status(401).json({ error: "Invalid credentials" });
       return;
     }
-    res.json({ token: generateToken(user.id), user: { id: user.id, email: user.email, name: user.name, color: user.color } });
+    res.json({ token: generateToken(user.id), user: { id: user.id, email: user.email, name: user.name, color: user.color, avatar: user.avatar } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });
@@ -75,12 +75,23 @@ app.post("/api/login", async (req, res) => {
 app.get("/api/me", requireAuth, async (req, res) => {
   try {
     const userId = (req as any).user.id;
-    const [users] = await pool.query<RowDataPacket[]>("SELECT id, email, name, color FROM User WHERE id = ?", [userId]);
+    const [users] = await pool.query<RowDataPacket[]>("SELECT id, email, name, color, avatar FROM User WHERE id = ?", [userId]);
     if (users.length === 0) {
       res.status(404).json({ error: "User not found" });
       return;
     }
     res.json(users[0]);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.put("/api/me/avatar", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const { avatar } = req.body;
+    await pool.query("UPDATE User SET avatar = ? WHERE id = ?", [avatar, userId]);
+    res.json({ success: true, avatar });
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
@@ -101,7 +112,7 @@ app.get("/api/workspaces", requireAuth, async (req, res) => {
     // For each workspace, fetch members (since the frontend expects w.members)
     for (let w of workspaces) {
       const [members] = await pool.query<RowDataPacket[]>(`
-        SELECT wm.id, wm.role, u.id as userId, u.name, u.email, u.color
+        SELECT wm.id, wm.role, u.id as userId, u.name, u.email, u.color, u.avatar
         FROM WorkspaceMember wm
         JOIN User u ON wm.userId = u.id
         WHERE wm.workspaceId = ?
@@ -111,7 +122,7 @@ app.get("/api/workspaces", requireAuth, async (req, res) => {
       w.members = members.map((m: any) => ({
         id: m.id,
         role: m.role,
-        user: { id: m.userId, name: m.name, email: m.email, color: m.color },
+        user: { id: m.userId, name: m.name, email: m.email, color: m.color, avatar: m.avatar },
         userId: m.userId,
         workspaceId: w.id
       }));
@@ -145,7 +156,7 @@ app.post("/api/workspaces", requireAuth, async (req, res) => {
     const workspace = workspaces[0];
 
     const [members] = await pool.query<RowDataPacket[]>(`
-      SELECT wm.id, wm.role, u.id as userId, u.name, u.email, u.color
+      SELECT wm.id, wm.role, u.id as userId, u.name, u.email, u.color, u.avatar
       FROM WorkspaceMember wm
       JOIN User u ON wm.userId = u.id
       WHERE wm.workspaceId = ?
@@ -154,12 +165,38 @@ app.post("/api/workspaces", requireAuth, async (req, res) => {
     workspace.members = members.map((m: any) => ({
       id: m.id,
       role: m.role,
-      user: { id: m.userId, name: m.name, email: m.email, color: m.color },
+      user: { id: m.userId, name: m.name, email: m.email, color: m.color, avatar: m.avatar },
       userId: m.userId,
       workspaceId: workspace.id
     }));
 
     res.json(workspace);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/workspaces/:id/files", requireAuth, async (req, res) => {
+  const workspaceId = req.params.id;
+  const { files } = req.body;
+  
+  try {
+    for (const file of files) {
+      const doc = new Y.Doc();
+      const ytext = doc.getText(file.filename);
+      ytext.insert(0, file.content);
+      const state = Buffer.from(Y.encodeStateAsUpdate(doc));
+      const docId = uuidv4();
+
+      await pool.execute(
+        `INSERT INTO DocumentState (id, workspaceId, filename, state, createdAt, updatedAt) 
+         VALUES (?, ?, ?, ?, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE state = VALUES(state), updatedAt = NOW()`,
+        [docId, workspaceId, file.filename, state]
+      );
+    }
+    res.json({ success: true });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });
@@ -176,7 +213,7 @@ app.get("/api/workspaces/:id", requireAuth, async (req, res) => {
     const workspace = workspaces[0];
 
     const [members] = await pool.query<RowDataPacket[]>(`
-      SELECT wm.id, wm.role, u.id as userId, u.name, u.email, u.color
+      SELECT wm.id, wm.role, u.id as userId, u.name, u.email, u.color, u.avatar
       FROM WorkspaceMember wm
       JOIN User u ON wm.userId = u.id
       WHERE wm.workspaceId = ?
@@ -185,10 +222,16 @@ app.get("/api/workspaces/:id", requireAuth, async (req, res) => {
     workspace.members = members.map((m: any) => ({
       id: m.id,
       role: m.role,
-      user: { id: m.userId, name: m.name, email: m.email, color: m.color },
+      user: { id: m.userId, name: m.name, email: m.email, color: m.color, avatar: m.avatar },
       userId: m.userId,
       workspaceId: workspace.id
     }));
+
+    const [files] = await pool.query<RowDataPacket[]>(
+      "SELECT filename FROM DocumentState WHERE workspaceId = ?",
+      [workspace.id]
+    );
+    workspace.files = files.map((f: any) => f.filename);
 
     res.json(workspace);
   } catch (error) {

@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { Github, Trash2, Save, Upload, Eye, EyeOff, CheckCircle2, X } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -28,16 +29,24 @@ function useToast() {
 function SettingsPage() {
   const { toasts, show } = useToast();
 
+  const { user, token, setAvatar } = useAuth();
+
   // Profile state
-  const [displayName, setDisplayName] = useState("Alex Morgan");
-  const [handle, setHandle] = useState("alex");
-  const [email, setEmail] = useState("alex@halcyon.dev");
+  const [displayName, setDisplayName] = useState(user?.name || "");
+  const [handle, setHandle] = useState("");
+  const [email, setEmail] = useState(user?.email || "");
   const [timezone, setTimezone] = useState("Europe/London");
-  const [bio, setBio] = useState(
-    "Staff engineer @ Halcyon. Interested in distributed systems, type-safety and terrible puns."
-  );
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [bio, setBio] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatar || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.name);
+      setEmail(user.email);
+      setAvatarUrl(user.avatar || null);
+    }
+  }, [user]);
 
   // Password state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -63,10 +72,33 @@ function SettingsPage() {
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { show("File too large — max 2 MB", "error"); return; }
-    const url = URL.createObjectURL(file);
-    setAvatarUrl(url);
-    show("Avatar updated", "success");
+    if (file.size > 5 * 1024 * 1024) { show("File too large — max 5 MB", "error"); return; }
+    
+    show("Uploading avatar...", "info");
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      try {
+        const res = await fetch("http://localhost:1234/api/me/avatar", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ avatar: base64 })
+        });
+        if (res.ok) {
+          setAvatarUrl(base64);
+          setAvatar(base64);
+          show("Avatar updated successfully", "success");
+        } else {
+          show("Failed to update avatar", "error");
+        }
+      } catch (err) {
+        show("Failed to upload avatar", "error");
+      }
+    };
+    reader.readAsDataURL(file);
     e.target.value = "";
   };
 
@@ -138,7 +170,7 @@ function SettingsPage() {
                 >
                   <Upload className="size-3.5" /> Upload avatar
                 </button>
-                <span className="text-[11px] text-zinc-500">PNG or JPG · max 2 MB</span>
+                <span className="text-[11px] text-zinc-500">PNG or JPG · max 5 MB</span>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

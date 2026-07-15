@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Star, Plus, Filter, Grid2x2, List, Search, X, Archive, UserPlus, Trash2 } from "lucide-react";
+import { Star, Plus, Filter, Grid2x2, List, Search, X, Archive, UserPlus, Trash2, Github, FolderOpen, Upload, Link2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -24,6 +24,8 @@ function Dashboard() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterLang, setFilterLang] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCloneModal, setShowCloneModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { user, isLoading, token } = useAuth();
   
@@ -174,7 +176,11 @@ function Dashboard() {
                 },
                 body: JSON.stringify({
                   name,
-                  language: template === "TypeScript API" || template === "React App" ? "TypeScript" : (template === "SQL Schema" ? "SQL" : "Markdown"),
+                  language: template === "Python App" ? "Python" : 
+                            template === "C Program" ? "C" : 
+                            template === "Java App" ? "Java" : 
+                            template === "JavaScript App" || template === "React App" ? "JavaScript" : 
+                            template === "SQL Schema" ? "SQL" : "Markdown",
                   description: `${template} workspace`
                 })
               });
@@ -184,11 +190,117 @@ function Dashboard() {
                 return;
               }
               const newWs = await res.json();
+
+              // Seed boilerplate files
+              let boilerplateFiles = [];
+              if (template === "Python App") {
+                boilerplateFiles = [{ filename: "main.py", content: "def main():\n    print('Hello World')\n\nif __name__ == '__main__':\n    main()\n" }];
+              } else if (template === "C Program") {
+                boilerplateFiles = [{ filename: "main.c", content: "#include <stdio.h>\n\nint main() {\n    printf(\"Hello World\\n\");\n    return 0;\n}\n" }];
+              } else if (template === "Java App") {
+                boilerplateFiles = [{ filename: "Main.java", content: "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello World\");\n    }\n}\n" }];
+              } else if (template === "JavaScript App") {
+                boilerplateFiles = [{ filename: "index.js", content: "console.log('Hello World');\n" }];
+              } else if (template === "React App") {
+                boilerplateFiles = [{ filename: "App.tsx", content: "export default function App() {\n  return <div>Hello World</div>;\n}\n" }];
+              } else if (template === "SQL Schema") {
+                boilerplateFiles = [{ filename: "schema.sql", content: "CREATE TABLE users (\n  id INT PRIMARY KEY,\n  name VARCHAR(255)\n);\n" }];
+              }
+
+              if (boilerplateFiles.length > 0) {
+                await fetch(`http://localhost:1234/api/workspaces/${newWs.id}/files`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ files: boilerplateFiles })
+                });
+              }
+
               setShowCreateModal(false);
               navigate({ to: "/workspace/$id", params: { id: newWs.id } });
             } catch (err) {
               console.error(err);
               alert("Error creating workspace");
+            }
+          }}
+        />
+      )}
+
+      {showCloneModal && (
+        <CloneRepoModal
+          onClose={() => setShowCloneModal(false)}
+          onClone={async (repoUrl, name) => {
+            try {
+              const res = await fetch("http://localhost:1234/api/workspaces", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                  name: name || repoUrl.split("/").pop()?.replace(".git", "") || "cloned-repo",
+                  language: "TypeScript",
+                  description: `Cloned from ${repoUrl}`
+                })
+              });
+              if (!res.ok) { alert("Failed to create workspace"); return; }
+              const newWs = await res.json();
+              setShowCloneModal(false);
+              navigate({ to: "/workspace/$id", params: { id: newWs.id } });
+            } catch { alert("Error cloning repository"); }
+          }}
+        />
+      )}
+
+      {showImportModal && (
+        <ImportFolderModal
+          onClose={() => setShowImportModal(false)}
+          onImport={async (name, language, files) => {
+            try {
+              const res = await fetch("http://localhost:1234/api/workspaces", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ name, language, description: `Imported project` })
+              });
+              if (!res.ok) { alert("Failed to create workspace"); return; }
+              const newWs = await res.json();
+              
+              if (files && files.length > 0) {
+                const ignoredFolders = [".git", "node_modules", ".next", "dist", "build"];
+                const textExtensions = ["js", "jsx", "ts", "tsx", "py", "java", "c", "h", "md", "sql", "json", "html", "css", "txt", "toml", "yml", "yaml", "xml"];
+                
+                const filesArray = Array.from(files).filter(f => {
+                  const parts = (f.webkitRelativePath || f.name).split('/');
+                  const isIgnoredFolder = parts.some(p => ignoredFolders.includes(p));
+                  const ext = f.name.split('.').pop()?.toLowerCase() || "";
+                  const isText = textExtensions.includes(ext);
+                  return !isIgnoredFolder && isText && f.size < 5 * 1024 * 1024; // Limit to <5MB
+                });
+
+                const payload = [];
+                for (const file of filesArray) {
+                  const parts = (file.webkitRelativePath || file.name).split('/');
+                  if (parts.length > 1) parts.shift();
+                  const path = parts.join('/');
+                  const content = await file.text();
+                  payload.push({ filename: path, content });
+                }
+
+                // Batch upload
+                const uploadRes = await fetch(`http://localhost:1234/api/workspaces/${newWs.id}/files`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({ files: payload })
+                });
+                if (!uploadRes.ok) {
+                  console.error("Failed to upload imported files to database");
+                }
+              }
+
+              setShowImportModal(false);
+              navigate({ to: "/workspace/$id", params: { id: newWs.id } });
+            } catch (err) {
+              console.error(err);
+              alert("Error importing project");
             }
           }}
         />
@@ -209,12 +321,26 @@ function Dashboard() {
               {allWorkspaces.length} active workspaces.
             </p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 rounded-md bg-brand px-3.5 py-2 text-sm font-medium text-brand-foreground hover:brightness-110"
-          >
-            <Plus className="size-4" /> New workspace
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowCloneModal(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-700 bg-panel px-3.5 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-600 hover:text-zinc-100"
+            >
+              <Github className="size-4" /> Clone repo
+            </button>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-700 bg-panel px-3.5 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-600 hover:text-zinc-100"
+            >
+              <FolderOpen className="size-4" /> Import project
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 rounded-md bg-brand px-3.5 py-2 text-sm font-medium text-brand-foreground hover:brightness-110"
+            >
+              <Plus className="size-4" /> New workspace
+            </button>
+          </div>
         </div>
 
         {/* Stats row */}
@@ -542,7 +668,7 @@ function CreateWorkspaceModal({
   const [template, setTemplate] = useState("Empty");
   const [error, setError] = useState("");
 
-  const TEMPLATES = ["Empty", "TypeScript API", "React App", "Documentation", "SQL Schema"];
+  const TEMPLATES = ["Empty", "JavaScript App", "React App", "Python App", "C Program", "Java App", "Documentation", "SQL Schema"];
 
   const submit = () => {
     if (!name.trim()) { setError("Workspace name is required"); return; }
@@ -619,6 +745,192 @@ function CreateWorkspaceModal({
             className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand py-2 text-xs font-medium text-brand-foreground hover:brightness-110"
           >
             <Plus className="size-3.5" /> Create workspace
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Clone Repo Modal ---- */
+function CloneRepoModal({
+  onClose,
+  onClone,
+}: {
+  onClose: () => void;
+  onClone: (repoUrl: string, name: string) => void;
+}) {
+  const [repoUrl, setRepoUrl] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = () => {
+    if (!repoUrl.trim()) { setError("Repository URL is required"); return; }
+    if (!/^https?:\/\/.+/.test(repoUrl.trim())) {
+      setError("Enter a valid GitHub HTTPS URL");
+      return;
+    }
+    const inferredName = name.trim() || repoUrl.split("/").pop()?.replace(".git", "") || "my-repo";
+    onClone(repoUrl.trim(), inferredName);
+  };
+
+  const inferredName = repoUrl ? (repoUrl.split("/").pop()?.replace(".git", "") || "") : "";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-surface p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Github className="size-5 text-brand" />
+            <h2 className="text-base font-semibold text-zinc-100">Clone GitHub repository</h2>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X className="size-4" /></button>
+        </div>
+
+        <p className="mb-4 text-xs text-zinc-500">Enter a public GitHub repository URL to clone it into a new CoFlux workspace.</p>
+
+        <div className="space-y-4">
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-zinc-400">
+            Repository URL
+            <div className="flex items-center gap-2 rounded-md border border-zinc-700 bg-panel px-3 focus-within:border-brand">
+              <Link2 className="size-3.5 shrink-0 text-zinc-600" />
+              <input
+                autoFocus
+                value={repoUrl}
+                onChange={(e) => { setRepoUrl(e.target.value); setError(""); }}
+                placeholder="https://github.com/username/repo.git"
+                className="h-9 flex-1 bg-transparent text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+              />
+            </div>
+            {error && <span className="text-rose-400">{error}</span>}
+            {inferredName && <span className="text-zinc-600">Workspace will be named: <span className="text-zinc-400 font-mono">{inferredName}</span></span>}
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-zinc-400">
+            Workspace name <span className="font-normal text-zinc-600">(optional — inferred from URL)</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={inferredName || "my-repo"}
+              className="h-9 rounded-md border border-zinc-700 bg-panel px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-brand focus:outline-none"
+            />
+          </label>
+        </div>
+
+        <div className="mt-6 flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-md border border-zinc-700 py-2 text-xs text-zinc-300 hover:bg-zinc-800">Cancel</button>
+          <button
+            onClick={submit}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand py-2 text-xs font-medium text-brand-foreground hover:brightness-110"
+          >
+            <Github className="size-3.5" /> Clone repository
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Import Folder Modal ---- */
+function ImportFolderModal({
+  onClose,
+  onImport,
+}: {
+  onClose: () => void;
+  onImport: (name: string, language: string, files: FileList | null) => void;
+}) {
+  const [name, setName] = useState("");
+  const [language, setLanguage] = useState("JavaScript");
+  const [files, setFiles] = useState<FileList | null>(null);
+  const [error, setError] = useState("");
+
+  const LANGUAGES = ["JavaScript", "Python", "Java", "C", "SQL", "Markdown"];
+
+  const submit = () => {
+    if (!name.trim()) { setError("Workspace name is required"); return; }
+    if (!files || files.length === 0) { setError("Please select at least one file"); return; }
+    onImport(name.trim(), language, files);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-surface p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="size-5 text-brand" />
+            <h2 className="text-base font-semibold text-zinc-100">Import project</h2>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X className="size-4" /></button>
+        </div>
+
+        <p className="mb-4 text-xs text-zinc-500">Select files from your local machine to import into a new CoFlux workspace.</p>
+
+        <div className="space-y-4">
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-zinc-400">
+            Workspace name
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError(""); }}
+              placeholder="my-imported-project"
+              className="h-9 rounded-md border border-zinc-700 bg-panel px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-brand focus:outline-none"
+            />
+            {error && <span className="text-rose-400">{error}</span>}
+          </label>
+
+          <div className="flex flex-col gap-1.5 text-xs font-medium text-zinc-400">
+            Primary language
+            <div className="flex flex-wrap gap-1.5">
+              {LANGUAGES.map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLanguage(l)}
+                  className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${language === l ? "border-brand bg-brand/10 text-brand" : "border-zinc-700 text-zinc-400 hover:border-zinc-600"}`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5 text-xs font-medium text-zinc-400">
+            Select files
+            <div
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-zinc-700 bg-panel py-6 text-center hover:border-brand/50 transition-colors"
+              onClick={() => document.getElementById("import-file-input")?.click()}
+            >
+              <Upload className="size-6 text-zinc-600" />
+              {files && files.length > 0 ? (
+                <>
+                  <span className="text-sm font-medium text-zinc-300">{files.length} file{files.length > 1 ? "s" : ""} selected</span>
+                  <span className="text-[11px] text-zinc-500">{Array.from(files).map(f => f.name).slice(0, 3).join(", ")}{files.length > 3 ? ` +${files.length - 3} more` : ""}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-medium text-zinc-400">Click to select files</span>
+                  <span className="text-[11px] text-zinc-600">or drag and drop your project files</span>
+                </>
+              )}
+            </div>
+            <input
+              id="import-file-input"
+              type="file"
+              multiple
+              {...{ webkitdirectory: "", directory: "" } as any}
+              className="hidden"
+              onChange={(e) => { setFiles(e.target.files); setError(""); }}
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-md border border-zinc-700 py-2 text-xs text-zinc-300 hover:bg-zinc-800">Cancel</button>
+          <button
+            onClick={submit}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand py-2 text-xs font-medium text-brand-foreground hover:brightness-110"
+          >
+            <FolderOpen className="size-3.5" /> Import project
           </button>
         </div>
       </div>
