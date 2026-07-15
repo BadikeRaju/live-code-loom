@@ -21,6 +21,7 @@ import {
   X,
   Users,
   MessageSquare,
+  Trash2,
   Activity as ActivityIcon,
   History,
   Circle,
@@ -1829,12 +1830,31 @@ function ChatPanel({
     e.target.value = "";
   };
 
+  const clearChat = () => {
+    if (!ychat) return;
+    if (window.confirm("Are you sure you want to clear the chat history for everyone in this workspace?")) {
+      ychat.delete(0, ychat.length);
+      onToast("Chat cleared successfully", "info");
+    }
+  };
+
   return (
     <div className="flex h-full flex-col relative">
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        <div className="text-center font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-          — today —
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+            — today —
+          </span>
+          {chatMessages.length > 0 && (
+            <button
+              onClick={clearChat}
+              title="Delete all messages"
+              className="text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1 text-[10px] cursor-pointer"
+            >
+              <Trash2 className="size-3" /> Clear Chat
+            </button>
+          )}
         </div>
         {chatMessages.map((m) => (
           <div key={m.id} className="flex flex-col gap-1">
