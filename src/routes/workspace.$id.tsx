@@ -1205,17 +1205,20 @@ function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
   const roomName = `${workspaceId}_${filename}`;
   if (!ydocs.has(roomName)) {
     const doc = new Y.Doc();
-    const provider = new WebsocketProvider(WS_URL, roomName, doc);
-    
-    provider.awareness.setLocalStateField("user", {
-      name: user?.name || "Anonymous",
-      color: user?.color || "#10b981",
-    });
-    
     ydocs.set(roomName, doc);
-    yproviders.set(roomName, provider);
+    
+    if (typeof window !== "undefined") {
+      const provider = new WebsocketProvider(WS_URL, roomName, doc);
+      
+      provider.awareness.setLocalStateField("user", {
+        name: user?.name || "Anonymous",
+        color: user?.color || "#10b981",
+      });
+      
+      yproviders.set(roomName, provider);
+    }
   }
-  return { doc: ydocs.get(roomName)!, provider: yproviders.get(roomName)! };
+  return { doc: ydocs.get(roomName)!, provider: yproviders.get(roomName) || null };
 }
 
 const defaultContent = (filename: string) => {
