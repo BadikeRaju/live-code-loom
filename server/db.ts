@@ -3,18 +3,51 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const dbUri = process.env.DATABASE_URL?.replace("mysql://", "") || "";
-const [credentials, hostAndDb] = dbUri.split("@");
-const [user, password] = credentials.split(":");
-const [hostPort, database] = hostAndDb.split("/");
-const [host, port] = hostPort.split(":");
+const dbUri = process.env.DATABASE_URL || "";
+let host = "localhost";
+let port = 3306;
+let user = "root";
+let password = "";
+let database = "";
+let ssl: any = undefined;
+
+if (dbUri.startsWith("mysql://")) {
+  try {
+    const url = new URL(dbUri);
+    host = url.hostname;
+    port = url.port ? parseInt(url.port, 10) : 3306;
+    user = url.username;
+    password = decodeURIComponent(url.password);
+    database = url.pathname.replace(/^\//, "");
+    
+    // Cloud databases like Aiven require SSL. Enable it for remote hosts.
+    if (url.searchParams.get("ssl-mode") === "REQUIRED" || !["localhost", "127.0.0.1"].includes(host)) {
+      ssl = {
+        rejectUnauthorized: false
+      };
+    }
+  } catch (err) {
+    console.error("Failed to parse DATABASE_URL with URL constructor, falling back to manual parsing", err);
+    const cleanUri = dbUri.replace("mysql://", "");
+    const [credentials, hostAndDb] = cleanUri.split("@");
+    const [dbUser, dbPassword] = credentials.split(":");
+    const [hostPort, dbName] = hostAndDb.split("/");
+    const [dbHost, dbPort] = hostPort.split(":");
+    host = dbHost;
+    port = parseInt(dbPort || "3306", 10);
+    user = dbUser;
+    password = decodeURIComponent(dbPassword || "");
+    database = dbName ? dbName.split("?")[0] : "";
+  }
+}
 
 export const pool = mysql.createPool({
   host,
-  port: parseInt(port || "3306", 10),
+  port,
   user,
-  password: decodeURIComponent(password || ""),
+  password,
   database,
+  ssl,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
