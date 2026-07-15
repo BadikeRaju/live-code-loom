@@ -389,7 +389,8 @@ function WorkspacePage() {
       initials: m.user?.name ? m.user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() : "??",
       color: m.user?.color || "bg-zinc-700",
       role: m.role === 'owner' ? 'Owner' : (m.role === 'editor' ? 'Editor' : 'Viewer'),
-      online: true
+      online: true,
+      avatar: m.user?.avatar
     }));
   }, [workspace]);
 
@@ -1614,15 +1615,17 @@ function ChatPanel({
 }) {
   const [draft, setDraft] = useState("");
   const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const EMOJIS = ["👍", "❤️", "🔥", "✅", "🚀", "😄", "🎉", "👀", "💡", "⚠️"];
 
   // Get or create Yjs doc for workspace-wide chat
-  const { doc } = useMemo(() => {
-    if (!workspaceId || !user) return { doc: null };
+  const { doc, provider } = useMemo(() => {
+    if (!workspaceId || !user) return { doc: null, provider: null };
     return getWorkspaceDoc(workspaceId, "workspace-chat", user);
   }, [workspaceId, user]);
 
@@ -1647,8 +1650,74 @@ function ChatPanel({
     };
   }, [ychat]);
 
+  // Listen to typing status from other collaborators using Yjs awareness
+  useEffect(() => {
+    if (!provider) return;
+
+    const handleAwareness = () => {
+      const states = provider.awareness.getStates();
+      const currentClientId = provider.awareness.clientID;
+      const typing: string[] = [];
+
+      states.forEach((state: any, clientId: number) => {
+        if (clientId === currentClientId) return;
+        if (state.chatTyping && state.user?.name) {
+          typing.push(state.user.name);
+        }
+      });
+
+      setTypingUsers(typing);
+    };
+
+    provider.awareness.on("change", handleAwareness);
+    handleAwareness();
+
+    return () => {
+      provider.awareness.off("change", handleAwareness);
+    };
+  }, [provider]);
+
+  // Clean up typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleTyping = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDraft(e.target.value);
+
+    if (!provider || !user) return;
+
+    // Set local state in awareness to true
+    const currentState = provider.awareness.getLocalState();
+    if (!currentState?.chatTyping) {
+      provider.awareness.setLocalStateField("chatTyping", true);
+    }
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Clear typing state after 2.5s of no keystrokes
+    typingTimeoutRef.current = setTimeout(() => {
+      provider.awareness.setLocalStateField("chatTyping", false);
+    }, 2500);
+  };
+
   const sendMessage = () => {
     if (!draft.trim() || !ychat || !user) return;
+
+    // Reset typing state immediately
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    if (provider) {
+      provider.awareness.setLocalStateField("chatTyping", false);
+    }
     
     const initials = user.name
       ? user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase()
@@ -1733,13 +1802,23 @@ function ChatPanel({
             </p>
           </div>
         ))}
+        {typingUsers.length > 0 && (
+          <div className="ml-7 flex items-center gap-2 text-[11px] text-zinc-500">
+            <span className="flex gap-0.5">
+              <span className="size-1 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.3s]" />
+              <span className="size-1 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.15s]" />
+              <span className="size-1 animate-bounce rounded-full bg-zinc-500" />
+            </span>
+            {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing…
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
       <div className="shrink-0 border-t border-zinc-800 p-3">
         <div className="rounded-md border border-zinc-800 bg-panel focus-within:border-zinc-700">
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={handleTyping}
             placeholder="Message the workspace… ⌘⏎ to send"
             className="w-full resize-none bg-transparent p-2.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
             rows={2}
@@ -1819,15 +1898,23 @@ function MembersPanel({ members, onInvite }: { members: any[]; onInvite: () => v
   );
 }
 
-function MemberRow({ member }: { member: typeof members[number] }) {
+function MemberRow({ member }: { member: any }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02]">
       <div className="relative">
-        <span
-          className={`grid size-8 place-items-center rounded-full ${member.color} text-xs font-bold text-zinc-950`}
-        >
-          {member.initials}
-        </span>
+        {member.avatar ? (
+          <img
+            src={member.avatar}
+            alt={member.name}
+            className="size-8 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            className={`grid size-8 place-items-center rounded-full ${member.color || "bg-zinc-700"} text-xs font-bold text-zinc-950`}
+          >
+            {member.initials}
+          </span>
+        )}
         <span
           className={
             "absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-surface " +
