@@ -61,7 +61,7 @@ function Dashboard() {
   }, []);
 
   const sharedWorkspaces = allWorkspaces.filter((w) => w.members.some((m: any) => m.userId === user?.id && m.role !== 'owner'));
-  const recentWorkspaces = allWorkspaces.slice(0, 3); // Todo: proper sorting
+  const recentWorkspaces = [...allWorkspaces].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3);
 
   const filteredWorkspaces = useMemo(() => {
     let list = allWorkspaces;
@@ -520,7 +520,7 @@ function Dashboard() {
                       )}
                     </div>
                     <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-                      {w.updated}
+                      Created: {new Date(w.createdAt).toLocaleString()}
                     </span>
                   </div>
                 </Link>
@@ -570,7 +570,7 @@ function Dashboard() {
                       </button>
                     )}
                     <span className="font-mono text-[10px] text-zinc-600">
-                      {new Date(w.updatedAt).toLocaleDateString()}
+                      Created: {new Date(w.createdAt).toLocaleString()}
                     </span>
                     <div className="flex -space-x-1.5">
                       {w.members.slice(0, 3).map((m) => (
