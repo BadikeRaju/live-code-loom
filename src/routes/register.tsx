@@ -24,8 +24,10 @@ function RegisterPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email") as string;
+    const firstName = formData.get("firstName") as string;
+    const lastName = formData.get("lastName") as string;
+    const name = `${firstName} ${lastName}`.trim();
     const password = formData.get("password") as string;
-    const name = formData.get("name") as string;
     
     setLoading(true);
     setError("");
@@ -67,8 +69,8 @@ function RegisterPage() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && <div className="text-red-500 text-sm font-medium">{error}</div>}
         <div className="grid grid-cols-2 gap-3">
-          <TextField name="name" label="Full name" placeholder="Alex Morgan" autoFocus />
-          <TextField name="handle" label="Handle" placeholder="alex" />
+          <TextField name="firstName" label="First name" placeholder="Alex" autoFocus />
+          <TextField name="lastName" label="Last name" placeholder="Morgan" />
         </div>
         <TextField name="email" label="Work email" type="email" placeholder="you@company.dev" />
         <TextField name="password" label="Password" type="password" placeholder="At least 10 characters" />
