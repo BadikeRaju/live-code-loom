@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { LogoMark } from "./site-header";
 import { useAuth } from "@/lib/auth-context";
+import { API_URL } from "@/lib/config";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -28,8 +29,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user && token) {
       Promise.all([
-        fetch("http://localhost:1234/api/workspaces", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("http://localhost:1234/api/notifications", { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${API_URL}/api/workspaces`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/notifications`, { headers: { Authorization: `Bearer ${token}` } })
       ])
       .then(([resW, resN]) => Promise.all([resW.json(), resN.json()]))
       .then(([dataW, dataN]) => {

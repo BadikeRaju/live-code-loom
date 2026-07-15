@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { Github, Trash2, Save, Upload, Eye, EyeOff, CheckCircle2, X } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { API_URL } from "@/lib/config";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -79,7 +80,7 @@ function SettingsPage() {
     reader.onload = async () => {
       const base64 = reader.result as string;
       try {
-        const res = await fetch("http://localhost:1234/api/me/avatar", {
+        const res = await fetch(`${API_URL}/api/me/avatar`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",

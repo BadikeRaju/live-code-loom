@@ -3,6 +3,7 @@ import { Github } from "lucide-react";
 import { AuthShell, TextField } from "@/components/auth-shell";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { API_URL } from "@/lib/config";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
@@ -33,7 +34,7 @@ function RegisterPage() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:1234/api/register", {
+      const res = await fetch(`${API_URL}/api/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, name })

@@ -5,6 +5,7 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useAuth } from "@/lib/auth-context";
+import { API_URL, WS_URL } from "@/lib/config";
 import {
   ChevronDown,
   ChevronRight,
@@ -113,7 +114,7 @@ function WorkspacePage() {
 
   const loadWorkspace = useCallback(() => {
     if (token) {
-      fetch(`http://localhost:1234/api/workspaces/${workspaceId}`, {
+      fetch(`${API_URL}/api/workspaces/${workspaceId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(res => res.ok ? res.json() : null)
@@ -417,7 +418,7 @@ function WorkspacePage() {
       {showInviteModal && (
         <InviteModal onClose={() => setShowInviteModal(false)} onInvite={async (email) => {
           try {
-            const res = await fetch(`http://localhost:1234/api/workspaces/${workspaceId}/share`, {
+            const res = await fetch(`${API_URL}/api/workspaces/${workspaceId}/share`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -1201,7 +1202,7 @@ function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
   const roomName = `${workspaceId}_${filename}`;
   if (!ydocs.has(roomName)) {
     const doc = new Y.Doc();
-    const provider = new WebsocketProvider("ws://localhost:1234", roomName, doc);
+    const provider = new WebsocketProvider(WS_URL, roomName, doc);
     
     provider.awareness.setLocalStateField("user", {
       name: user?.name || "Anonymous",

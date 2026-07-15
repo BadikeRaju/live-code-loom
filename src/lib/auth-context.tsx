@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { API_URL } from "./config";
 
 interface User {
   id: string;
@@ -28,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = localStorage.getItem("token");
     if (storedToken) {
       setToken(storedToken);
-      fetch("http://localhost:1234/api/me", {
+      fetch(`${API_URL}/api/me`, {
         headers: { Authorization: `Bearer ${storedToken}` }
       })
       .then(res => res.json())

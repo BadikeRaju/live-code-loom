@@ -3,6 +3,7 @@ import { Star, Plus, Filter, Grid2x2, List, Search, X, Archive, UserPlus, Trash2
 import { AppShell } from "@/components/app-shell";
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { API_URL } from "@/lib/config";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -36,8 +37,8 @@ function Dashboard() {
   useEffect(() => {
     if (user && token) {
       Promise.all([
-        fetch("http://localhost:1234/api/workspaces", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("http://localhost:1234/api/notifications", { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${API_URL}/api/workspaces`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/notifications`, { headers: { Authorization: `Bearer ${token}` } })
       ])
         .then(([resW, resN]) => Promise.all([resW.json(), resN.json()]))
         .then(([dataW, dataN]) => {
@@ -92,7 +93,7 @@ function Dashboard() {
     e.preventDefault();
     e.stopPropagation();
     try {
-      await fetch(`http://localhost:1234/api/workspaces/${w.id}/star`, {
+      await fetch(`${API_URL}/api/workspaces/${w.id}/star`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ starred: !w.starred })
@@ -105,7 +106,7 @@ function Dashboard() {
     e.preventDefault();
     e.stopPropagation();
     try {
-      await fetch(`http://localhost:1234/api/workspaces/${w.id}/archive`, {
+      await fetch(`${API_URL}/api/workspaces/${w.id}/archive`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ archived: !w.archived })
@@ -120,7 +121,7 @@ function Dashboard() {
     const email = window.prompt("Enter email to invite:");
     if (!email) return;
     try {
-      const res = await fetch(`http://localhost:1234/api/workspaces/${w.id}/share`, {
+      const res = await fetch(`${API_URL}/api/workspaces/${w.id}/share`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email })
@@ -136,7 +137,7 @@ function Dashboard() {
     e.stopPropagation();
     if (!window.confirm(`Are you sure you want to delete "${w.name}"? This action is permanent and cannot be undone.`)) return;
     try {
-      const res = await fetch(`http://localhost:1234/api/workspaces/${w.id}`, {
+      const res = await fetch(`${API_URL}/api/workspaces/${w.id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -168,7 +169,7 @@ function Dashboard() {
           onClose={() => setShowCreateModal(false)}
           onCreate={async (name, visibility, template) => {
             try {
-              const res = await fetch("http://localhost:1234/api/workspaces", {
+              const res = await fetch(`${API_URL}/api/workspaces`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -208,7 +209,7 @@ function Dashboard() {
               }
 
               if (boilerplateFiles.length > 0) {
-                await fetch(`http://localhost:1234/api/workspaces/${newWs.id}/files`, {
+                await fetch(`${API_URL}/api/workspaces/${newWs.id}/files`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
@@ -233,7 +234,7 @@ function Dashboard() {
           onClose={() => setShowCloneModal(false)}
           onClone={async (repoUrl, name) => {
             try {
-              const res = await fetch("http://localhost:1234/api/workspaces", {
+              const res = await fetch(`${API_URL}/api/workspaces`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
@@ -256,7 +257,7 @@ function Dashboard() {
           onClose={() => setShowImportModal(false)}
           onImport={async (name, language, files) => {
             try {
-              const res = await fetch("http://localhost:1234/api/workspaces", {
+              const res = await fetch(`${API_URL}/api/workspaces`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ name, language, description: `Imported project` })
@@ -286,7 +287,7 @@ function Dashboard() {
                 }
 
                 // Batch upload
-                const uploadRes = await fetch(`http://localhost:1234/api/workspaces/${newWs.id}/files`, {
+                const uploadRes = await fetch(`${API_URL}/api/workspaces/${newWs.id}/files`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                   body: JSON.stringify({ files: payload })
