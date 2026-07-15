@@ -613,6 +613,8 @@ function WorkspacePage() {
               active={rightTab}
               comments={comments}
               versionHistory={versionHistory}
+              workspaceId={workspace?.id}
+              user={user}
               onResolveComment={(id) => {
                 if (!activeTab) return;
                 const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
@@ -1557,6 +1559,8 @@ function RightPanel({
   onInvite,
   onToast,
   members,
+  workspaceId,
+  user,
 }: {
   active: "members" | "chat" | "activity" | "comments" | "history";
   comments: CommentData[];
@@ -1569,6 +1573,8 @@ function RightPanel({
   onInvite: () => void;
   onToast: (msg: string, type?: "success" | "error" | "info") => void;
   members: any[];
+  workspaceId?: string;
+  user?: any;
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -1576,7 +1582,7 @@ function RightPanel({
         <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-100">{active}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
-        {active === "chat" && <ChatPanel onToast={onToast} />}
+        {active === "chat" && <ChatPanel onToast={onToast} workspaceId={workspaceId} user={user} />}
         {active === "members" && <MembersPanel members={members} onInvite={onInvite} />}
         {active === "activity" && <ActivityPanel />}
         {active === "comments" && (
@@ -1597,26 +1603,72 @@ function RightPanel({
   );
 }
 
-function ChatPanel({ onToast }: { onToast: (msg: string, type?: "success" | "error" | "info") => void }) {
+function ChatPanel({ 
+  onToast,
+  workspaceId,
+  user
+}: { 
+  onToast: (msg: string, type?: "success" | "error" | "info") => void;
+  workspaceId?: string;
+  user?: any;
+}) {
   const [draft, setDraft] = useState("");
-  const [chatMessages, setChatMessages] = useState(initialMessages);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const EMOJIS = ["👍", "❤️", "🔥", "✅", "🚀", "😄", "🎉", "👀", "💡", "⚠️"];
 
+  // Get or create Yjs doc for workspace-wide chat
+  const { doc } = useMemo(() => {
+    if (!workspaceId || !user) return { doc: null };
+    return getWorkspaceDoc(workspaceId, "workspace-chat", user);
+  }, [workspaceId, user]);
+
+  const ychat = useMemo(() => {
+    if (!doc) return null;
+    return doc.getArray<any>("chat_messages");
+  }, [doc]);
+
+  useEffect(() => {
+    if (!ychat) return;
+
+    const updateMessages = () => {
+      setChatMessages(ychat.toArray());
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    };
+
+    ychat.observe(updateMessages);
+    updateMessages();
+
+    return () => {
+      ychat.unobserve(updateMessages);
+    };
+  }, [ychat]);
+
   const sendMessage = () => {
-    if (!draft.trim()) return;
+    if (!draft.trim() || !ychat || !user) return;
+    
+    const initials = user.name
+      ? user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase()
+      : "U";
+
     const newMsg = {
-      id: `m${Date.now()}`,
-      author: members[0],
+      id: `m${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      author: {
+        id: user.id,
+        name: user.name,
+        color: user.color || "bg-zinc-700",
+        initials,
+        avatar: user.avatar,
+      },
       time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
       body: draft.trim(),
     };
-    setChatMessages((prev) => [...prev, newMsg]);
+
+    ychat.push([newMsg]);
     setDraft("");
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
 
   const handleAttach = () => {
@@ -1625,14 +1677,24 @@ function ChatPanel({ onToast }: { onToast: (msg: string, type?: "success" | "err
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && ychat && user) {
+      const initials = user.name
+        ? user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase()
+        : "U";
+
       const newMsg = {
-        id: `m${Date.now()}`,
-        author: members[0],
+        id: `m${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        author: {
+          id: user.id,
+          name: user.name,
+          color: user.color || "bg-zinc-700",
+          initials,
+          avatar: user.avatar,
+        },
         time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
         body: `📎 Attached: ${file.name}`,
       };
-      setChatMessages((prev) => [...prev, newMsg]);
+      ychat.push([newMsg]);
       onToast(`Attached: ${file.name}`, "success");
     }
     e.target.value = "";
@@ -1649,12 +1711,20 @@ function ChatPanel({ onToast }: { onToast: (msg: string, type?: "success" | "err
           <div key={m.id} className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span
-                  className={`grid size-5 place-items-center rounded-full ${m.author.color} text-[9px] font-bold text-zinc-950`}
-                >
-                  {m.author.initials}
-                </span>
-                <span className="text-xs font-semibold text-zinc-100">{m.author.name}</span>
+                {m.author?.avatar ? (
+                  <img
+                    src={m.author.avatar}
+                    alt={m.author.name}
+                    className="size-5 rounded-full object-cover"
+                  />
+                ) : (
+                  <span
+                    className={`grid size-5 place-items-center rounded-full ${m.author?.color || "bg-zinc-700"} text-[9px] font-bold text-zinc-950`}
+                  >
+                    {m.author?.initials || "U"}
+                  </span>
+                )}
+                <span className="text-xs font-semibold text-zinc-100">{m.author?.name || "User"}</span>
               </div>
               <span className="font-mono text-[10px] text-zinc-600">{m.time}</span>
             </div>
@@ -1663,14 +1733,6 @@ function ChatPanel({ onToast }: { onToast: (msg: string, type?: "success" | "err
             </p>
           </div>
         ))}
-        <div className="ml-7 flex items-center gap-2 text-[11px] text-zinc-500">
-          <span className="flex gap-0.5">
-            <span className="size-1 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.3s]" />
-            <span className="size-1 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.15s]" />
-            <span className="size-1 animate-bounce rounded-full bg-zinc-500" />
-          </span>
-          Priya is typing…
-        </div>
         <div ref={messagesEndRef} />
       </div>
       <div className="shrink-0 border-t border-zinc-800 p-3">
