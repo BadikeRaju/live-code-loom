@@ -1205,19 +1205,19 @@ const yproviders = new Map<string, WebsocketProvider>();
 function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
   const roomName = `${workspaceId}_${filename}`;
   if (!ydocs.has(roomName)) {
-    const doc = new Y.Doc();
-    ydocs.set(roomName, doc);
+    ydocs.set(roomName, new Y.Doc());
+  }
+  
+  if (typeof window !== "undefined" && !yproviders.has(roomName)) {
+    const doc = ydocs.get(roomName)!;
+    const provider = new WebsocketProvider(WS_URL, roomName, doc);
     
-    if (typeof window !== "undefined") {
-      const provider = new WebsocketProvider(WS_URL, roomName, doc);
-      
-      provider.awareness.setLocalStateField("user", {
-        name: user?.name || "Anonymous",
-        color: user?.color || "#10b981",
-      });
-      
-      yproviders.set(roomName, provider);
-    }
+    provider.awareness.setLocalStateField("user", {
+      name: user?.name || "Anonymous",
+      color: user?.color || "#10b981",
+    });
+    
+    yproviders.set(roomName, provider);
   }
   return { doc: ydocs.get(roomName)!, provider: yproviders.get(roomName) || null };
 }
