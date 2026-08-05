@@ -301,7 +301,8 @@ def commit_and_push(workspace_id):
             repo_url = ws_row["repoUrl"]
             
             # Extract owner/repo from url: https://github.com/owner/repo.git
-            parts = repo_url.rstrip(".git").split("/")
+            clean_repo_url = repo_url[:-4] if repo_url.endswith(".git") else repo_url
+            parts = clean_repo_url.split("/")
             if len(parts) < 2: return jsonify({"error": "Invalid repoUrl"}), 400
             owner_repo = f"{parts[-2]}/{parts[-1]}"
             
