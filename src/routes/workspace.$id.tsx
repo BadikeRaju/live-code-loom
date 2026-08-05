@@ -118,9 +118,9 @@ function WorkspacePage() {
       fetch(`${API_URL}/api/workspaces/${workspaceId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => setWorkspace(data))
-      .catch(console.error);
+        .then(res => res.ok ? res.json() : null)
+        .then(data => setWorkspace(data))
+        .catch(console.error);
     }
   }, [token, workspaceId]);
 
@@ -156,7 +156,7 @@ function WorkspacePage() {
     if (workspace && workspace.files && workspace.files.length > 0) {
       const buildTree = (paths: string[]): FileNode[] => {
         const root: FileNode[] = [];
-        
+
         paths.forEach(path => {
           const parts = path.split('/');
           let currentLevel = root;
@@ -165,44 +165,44 @@ function WorkspacePage() {
           parts.forEach((part, index) => {
             currentPath = currentPath ? `${currentPath}/${part}` : part;
             const isFile = index === parts.length - 1;
-            
+
             let existingNode = currentLevel.find(n => n.name === part);
-            
+
             if (!existingNode) {
               existingNode = {
                 id: currentPath,
                 name: part,
                 type: isFile ? "file" : "folder",
-                ...(isFile ? { 
-                  language: part.endsWith('.md') ? 'Markdown' : 
-                            part.endsWith('.json') ? 'JSON' : 
-                            part.endsWith('.py') ? 'Python' :
-                            part.endsWith('.java') ? 'Java' :
-                            part.endsWith('.c') || part.endsWith('.h') ? 'C' :
-                            part.endsWith('.sql') ? 'SQL' : 'TypeScript' 
+                ...(isFile ? {
+                  language: part.endsWith('.md') ? 'Markdown' :
+                    part.endsWith('.json') ? 'JSON' :
+                      part.endsWith('.py') ? 'Python' :
+                        part.endsWith('.java') ? 'Java' :
+                          part.endsWith('.c') || part.endsWith('.h') ? 'C' :
+                            part.endsWith('.sql') ? 'SQL' : 'TypeScript'
                 } : { children: [] })
               };
               currentLevel.push(existingNode);
             }
-            
+
             if (!isFile && existingNode.children) {
               currentLevel = existingNode.children;
             }
           });
         });
-        
+
         return root;
       };
-      
+
       const newTree = buildTree(workspace.files);
       setTree(newTree);
 
       // Open the first file by default if tabs are empty or still the mock ones
       if (tabs.length === 2 && tabs[0].id === "src/index.ts") {
         const firstFile = workspace.files[0];
-        setTabs([{ 
-          id: firstFile, 
-          name: firstFile.split('/').pop() || firstFile, 
+        setTabs([{
+          id: firstFile,
+          name: firstFile.split('/').pop() || firstFile,
           kind: firstFile.endsWith('.md') ? 'docs' : 'code',
           dirty: false
         }]);
@@ -307,7 +307,7 @@ function WorkspacePage() {
     if (!newName.trim()) return;
 
     let targetNode: FileNode | undefined;
-    
+
     // Find node first
     const findNode = (nodes: FileNode[]): boolean => {
       for (const n of nodes) {
@@ -321,7 +321,7 @@ function WorkspacePage() {
     };
     findNode(tree);
     if (!targetNode) return;
-    
+
     const oldName = targetNode.name;
     if (oldName === newName) return;
 
@@ -347,9 +347,9 @@ function WorkspacePage() {
             });
           };
 
-          return { 
-            ...n, 
-            name: newName, 
+          return {
+            ...n,
+            name: newName,
             id: newId,
             children: n.children ? updateChildrenIds(n.children, oldId, newId) : undefined
           };
@@ -365,19 +365,19 @@ function WorkspacePage() {
     setTabs(prev => prev.map(t => {
       if (t.id.startsWith(oldId)) {
         const updatedId = t.id.replace(oldId, newId);
-        return { 
-          ...t, 
-          id: updatedId, 
-          name: t.id === oldId ? newName : t.name 
+        return {
+          ...t,
+          id: updatedId,
+          name: t.id === oldId ? newName : t.name
         };
       }
       return t;
     }));
-    
+
     if (active.startsWith(oldId)) {
       setActive(active.replace(oldId, newId));
     }
-    
+
     show(`✓ Renamed "${oldName}" to "${newName}"`, "success");
   };
 
@@ -556,10 +556,10 @@ function WorkspacePage() {
             <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
               {activeTab ? (
                 activeTab.kind === "code" ? (
-                  <CodeEditor 
-                    key={activeTab.id} 
-                    filename={activeTab.id} 
-                    workspaceId={workspace.id} 
+                  <CodeEditor
+                    key={activeTab.id}
+                    filename={activeTab.id}
+                    workspaceId={workspace.id}
                     onCommentsChange={setComments}
                     onResolveComment={(id) => {
                       const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
@@ -764,7 +764,7 @@ function InviteModal({ onClose, onInvite }: { onClose: () => void; onInvite: (em
 
 function WorkspaceSearchModal({ tree, onClose, onOpen }: { tree: FileNode[]; onClose: () => void; onOpen: (n: FileNode) => void }) {
   const [query, setQuery] = useState("");
-  
+
   const flatten = (nodes: FileNode[]): FileNode[] => {
     let result: FileNode[] = [];
     for (const n of nodes) {
@@ -773,7 +773,7 @@ function WorkspaceSearchModal({ tree, onClose, onOpen }: { tree: FileNode[]; onC
     }
     return result;
   };
-  
+
   const allFiles = flatten(tree);
   const results = query.trim() ? allFiles.filter(f => f.name.toLowerCase().includes(query.toLowerCase())) : [];
 
@@ -798,7 +798,7 @@ function WorkspaceSearchModal({ tree, onClose, onOpen }: { tree: FileNode[]; onC
           />
           <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">ESC</kbd>
         </div>
-        
+
         {query && (
           <div className="max-h-80 overflow-y-auto py-2">
             {results.length === 0 ? (
@@ -1207,16 +1207,16 @@ function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
   if (!ydocs.has(roomName)) {
     ydocs.set(roomName, new Y.Doc());
   }
-  
+
   if (typeof window !== "undefined" && !yproviders.has(roomName)) {
     const doc = ydocs.get(roomName)!;
     const provider = new WebsocketProvider(WS_URL, roomName, doc);
-    
+
     provider.awareness.setLocalStateField("user", {
       name: user?.name || "Anonymous",
       color: user?.color || "#10b981",
     });
-    
+
     yproviders.set(roomName, provider);
   }
   return { doc: ydocs.get(roomName)!, provider: yproviders.get(roomName) || null };
@@ -1231,21 +1231,21 @@ const defaultContent = (filename: string) => {
 
 function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment, onResolveComment, onReplyComment }: { filename: string; workspaceId: string; onCommentsChange: (c: CommentData[]) => void; onRequestComment: (p: { start: string, end: string }) => void; onResolveComment?: (id: string) => void; onReplyComment?: (id: string, text: string) => void; }) {
   const { user } = useAuth();
-  
+
   const language = filename.endsWith(".ts") || filename.endsWith(".tsx") ? "typescript"
     : filename.endsWith(".json") ? "json"
-    : filename.endsWith(".md") ? "markdown"
-    : filename.endsWith(".py") ? "python"
-    : filename.endsWith(".java") ? "java"
-    : filename.endsWith(".c") || filename.endsWith(".h") ? "c"
-    : filename.endsWith(".sql") ? "sql"
-    : filename.endsWith(".css") ? "css"
-    : filename.endsWith(".html") ? "html"
-    : "javascript";
+      : filename.endsWith(".md") ? "markdown"
+        : filename.endsWith(".py") ? "python"
+          : filename.endsWith(".java") ? "java"
+            : filename.endsWith(".c") || filename.endsWith(".h") ? "c"
+              : filename.endsWith(".sql") ? "sql"
+                : filename.endsWith(".css") ? "css"
+                  : filename.endsWith(".html") ? "html"
+                    : "javascript";
 
   const { doc, provider } = useMemo(() => getWorkspaceDoc(workspaceId, filename, user), [workspaceId, filename, user]);
   const ytext = useMemo(() => doc.getText(filename), [doc, filename]);
-  
+
   useEffect(() => {
     if (ytext.toString().length === 0) {
       ytext.insert(0, defaultContent(filename));
@@ -1259,7 +1259,7 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
     const handleAwareness = () => {
       const states = provider.awareness.getStates();
       let css = "";
-      
+
       states.forEach((state: any, clientId: number) => {
         if (state.user && state.user.color) {
           const color = state.user.color;
@@ -1330,7 +1330,7 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
 
   useEffect(() => {
     if (!editorRef.current || !decorationsRef.current || !monacoRef.current || !isEditorMounted) return;
-    
+
     const updateDecorations = () => {
       const editor = editorRef.current;
       const model = editor.getModel();
@@ -1338,15 +1338,15 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
 
       const newDecorations: any[] = [];
       const commentIds: string[] = [];
-      
+
       ycomments.forEach((c) => {
         if (c.resolved || !c.startPos || !c.endPos) return;
-        
+
         try {
           let startPosArr: Uint8Array;
           if (typeof c.startPos === "string") startPosArr = fromBase64(c.startPos);
           else startPosArr = c.startPos instanceof Uint8Array ? c.startPos : new Uint8Array(Object.values(c.startPos || {}));
-          
+
           let endPosArr: Uint8Array;
           if (typeof c.endPos === "string") endPosArr = fromBase64(c.endPos);
           else endPosArr = c.endPos instanceof Uint8Array ? c.endPos : new Uint8Array(Object.values(c.endPos || {}));
@@ -1378,7 +1378,7 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
     ycomments.observe(updateDecorations);
     ytext.observe(updateDecorations);
     updateDecorations();
-    
+
     return () => {
       ycomments.unobserve(updateDecorations);
       ytext.unobserve(updateDecorations);
@@ -1390,7 +1390,7 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
     monacoRef.current = monaco;
     decorationsRef.current = editor.createDecorationsCollection();
     setIsEditorMounted(true);
-    
+
     import("y-monaco").then(({ MonacoBinding }) => {
       new MonacoBinding(ytext, editor.getModel(), new Set([editor]), provider.awareness);
     }).catch(console.error);
@@ -1406,10 +1406,10 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
           const model = ed.getModel();
           const startOffset = model.getOffsetAt(selection.getStartPosition());
           const endOffset = model.getOffsetAt(selection.getEndPosition());
-          
+
           const startRel = Y.createRelativePositionFromTypeIndex(ytext, startOffset);
           const endRel = Y.createRelativePositionFromTypeIndex(ytext, endOffset);
-          
+
           if (onRequestComment) {
             onRequestComment({
               start: toBase64(Y.encodeRelativePosition(startRel)),
@@ -1425,7 +1425,7 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
       if (target.type === monacoRef.current.editor.MouseTargetType.CONTENT_TEXT) {
         const position = target.position;
         const decorations = editor.getModel().getDecorationsInRange(new monacoRef.current.Range(position.lineNumber, position.column, position.lineNumber, position.column));
-        
+
         const commentDeco = decorations.find((d: any) => d.options.inlineClassName?.includes('comment-highlight'));
         if (commentDeco) {
           const commentId = decoToCommentMapRef.current.get(commentDeco.id);
@@ -1443,7 +1443,7 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
           }
         }
       }
-      
+
       // Close on clicking outside
       setActiveInlineComment(null);
     });
@@ -1469,17 +1469,17 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
         loading={<div className="grid h-full place-items-center text-zinc-500 text-xs font-mono">Loading editor…</div>}
       />
       {activeInlineComment && activeCommentObj && (
-        <div 
-          className="fixed z-50 w-80 shadow-2xl shadow-black rounded-md overflow-hidden bg-surface border border-zinc-700" 
+        <div
+          className="fixed z-50 w-80 shadow-2xl shadow-black rounded-md overflow-hidden bg-surface border border-zinc-700"
           style={{ top: activeInlineComment.top, left: activeInlineComment.left }}
         >
-          <CommentCard 
-            c={activeCommentObj} 
+          <CommentCard
+            c={activeCommentObj}
             onResolve={(id) => {
               onResolveComment?.(id);
               setActiveInlineComment(null);
-            }} 
-            onReply={(id, text) => onReplyComment?.(id, text)} 
+            }}
+            onReply={(id, text) => onReplyComment?.(id, text)}
           />
         </div>
       )}
@@ -1654,7 +1654,7 @@ function RightPanel({
             onResolve={onResolveComment}
             onReply={onReplyComment}
             onAdd={onAddComment}
-            onCancelPending={() => {}}
+            onCancelPending={() => { }}
           />
         )}
         {active === "history" && (
@@ -1665,11 +1665,11 @@ function RightPanel({
   );
 }
 
-function ChatPanel({ 
+function ChatPanel({
   onToast,
   workspaceId,
   user
-}: { 
+}: {
   onToast: (msg: string, type?: "success" | "error" | "info") => void;
   workspaceId?: string;
   user?: any;
@@ -1779,7 +1779,7 @@ function ChatPanel({
     if (provider) {
       provider.awareness.setLocalStateField("chatTyping", false);
     }
-    
+
     const initials = user.name
       ? user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase()
       : "U";
