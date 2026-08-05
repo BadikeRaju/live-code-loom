@@ -30,7 +30,7 @@ function useToast() {
 function SettingsPage() {
   const { toasts, show } = useToast();
 
-  const { user, token, setAvatar } = useAuth();
+  const { user, token, setAvatar, updateUser } = useAuth();
 
   // Profile state
   const [displayName, setDisplayName] = useState(user?.name || "");
@@ -77,6 +77,7 @@ function SettingsPage() {
         body: JSON.stringify({ name: displayName, avatar: avatarUrl, githubToken })
       });
       if (res.ok) {
+        updateUser({ name: displayName, githubToken });
         show("Profile saved successfully", "success");
       } else {
         show("Failed to save profile", "error");
@@ -104,6 +105,7 @@ function SettingsPage() {
         if (res.ok) {
           setAvatarUrl(base64);
           setAvatar(base64);
+          updateUser({ avatar: base64 });
           show("Avatar updated", "success");
         } else {
           show("Failed to update avatar", "error");

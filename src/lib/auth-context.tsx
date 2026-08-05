@@ -7,6 +7,7 @@ interface User {
   name: string;
   color: string;
   avatar?: string;
+  githubToken?: string;
 }
 
 interface AuthContextType {
@@ -15,6 +16,7 @@ interface AuthContextType {
   login: (token: string, user: User) => void;
   logout: () => void;
   setAvatar: (avatar: string) => void;
+  updateUser: (updates: Partial<User>) => void;
   isLoading: boolean;
 }
 
@@ -37,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.error) {
           logout();
         } else {
-          setUser(data);
+          setUser(data.user || data);
         }
       })
       .catch(() => logout())
@@ -63,8 +65,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(prev => prev ? { ...prev, avatar } : null);
   };
 
+  const updateUser = (updates: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, setAvatar, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, setAvatar, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
