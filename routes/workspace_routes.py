@@ -364,3 +364,27 @@ def commit_and_push(workspace_id):
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
+
+@workspace_bp.route("/<workspace_id>", methods=["DELETE"])
+@login_required
+def delete_workspace(workspace_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Check if user is owner
+            cursor.execute("SELECT role FROM WorkspaceMember WHERE workspaceId = %s AND userId = %s", (workspace_id, g.user["id"]))
+            row = cursor.fetchone()
+            if not row or row["role"] != "owner":
+                return jsonify({"error": "Only the workspace owner can delete it"}), 403
+            
+            # Delete related data
+            cursor.execute("DELETE FROM DocumentState WHERE workspaceId = %s", (workspace_id,))
+            cursor.execute("DELETE FROM WorkspaceFileContent WHERE workspaceId = %s", (workspace_id,))
+            cursor.execute("DELETE FROM WorkspaceMember WHERE workspaceId = %s", (workspace_id,))
+            cursor.execute("DELETE FROM Workspace WHERE id = %s", (workspace_id,))
+            
+            return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
