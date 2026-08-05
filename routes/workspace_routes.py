@@ -1,10 +1,23 @@
 from flask import Blueprint, request, jsonify, g
 import uuid
+import os
+import subprocess
+import tempfile
 from db import get_connection
 from auth import login_required
 from email_service import send_email
 
 workspace_bp = Blueprint("workspace", __name__)
+
+def get_workspace_files(workspace_id, cursor):
+    cursor.execute("SELECT filename FROM WorkspaceFileContent WHERE workspaceId = %s", (workspace_id,))
+    initial = [row["filename"] for row in cursor.fetchall()]
+    
+    cursor.execute("SELECT filename FROM DocumentState WHERE workspaceId = %s", (workspace_id,))
+    docs = [row["filename"] for row in cursor.fetchall()]
+    
+    combined = list(set(initial + docs))
+    return combined
 
 @workspace_bp.route("", methods=["GET"])
 @login_required
@@ -29,7 +42,6 @@ def get_workspaces():
                     WHERE wm.workspaceId = %s
                 """, (w["id"],))
                 members = cursor.fetchall()
-                # Format to match frontend expectations
                 for m in members:
                     m["user"] = {
                         "name": m.pop("user.name"),
@@ -38,18 +50,15 @@ def get_workspaces():
                     }
                 w["members"] = members
                 
-                # Determine files based on language
-                lang = w.get("language", "").lower()
-                if lang == "python":
-                    w["files"] = ["main.py", "requirements.txt", "README.md"]
-                elif lang == "c":
-                    w["files"] = ["main.c", "Makefile", "README.md"]
-                elif lang == "java":
-                    w["files"] = ["src/Main.java", "pom.xml", "README.md"]
-                elif lang == "sql":
-                    w["files"] = ["schema.sql", "queries.sql", "README.md"]
-                else:
-                    w["files"] = ["src/index.ts", "package.json", "docs/README.md"]
+                files = get_workspace_files(w["id"], cursor)
+                if not files:
+                    lang = w.get("language", "").lower()
+                    if lang == "python": files = ["main.py", "requirements.txt", "README.md"]
+                    elif lang == "c": files = ["main.c", "Makefile", "README.md"]
+                    elif lang == "java": files = ["src/Main.java", "pom.xml", "README.md"]
+                    elif lang == "sql": files = ["schema.sql", "queries.sql", "README.md"]
+                    else: files = ["src/index.ts", "package.json", "docs/README.md"]
+                w["files"] = files
                 
         return jsonify(workspaces)
     finally:
@@ -62,6 +71,7 @@ def create_workspace():
     name = data.get("name")
     description = data.get("description", "")
     language = data.get("language", "typescript")
+    repo_url = data.get("repoUrl")
     
     if not name:
         return jsonify({"error": "Name is required"}), 400
@@ -69,6 +79,28 @@ def create_workspace():
     workspace_id = str(uuid.uuid4())
     member_id = str(uuid.uuid4())
     user_id = g.user["id"]
+    
+    files_to_insert = []
+    
+    if repo_url:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                subprocess.run(["git", "clone", "--depth", "1", repo_url, tmpdir], check=True, capture_output=True)
+                for root, dirs, files in os.walk(tmpdir):
+                    if '.git' in dirs:
+                        dirs.remove('.git')
+                    for file in files:
+                        filepath = os.path.join(root, file)
+                        relpath = os.path.relpath(filepath, tmpdir)
+                        if os.path.getsize(filepath) > 5 * 1024 * 1024:
+                            continue
+                        try:
+                            with open(filepath, 'r', encoding='utf-8') as f:
+                                files_to_insert.append((str(uuid.uuid4()), workspace_id, relpath, f.read()))
+                        except UnicodeDecodeError:
+                            pass
+            except Exception as e:
+                return jsonify({"error": f"Failed to clone repository: {str(e)}"}), 400
     
     conn = get_connection()
     try:
@@ -81,7 +113,60 @@ def create_workspace():
                 "INSERT INTO WorkspaceMember (id, workspaceId, userId, role) VALUES (%s, %s, %s, 'owner')",
                 (member_id, workspace_id, user_id)
             )
+            
+            for f in files_to_insert:
+                cursor.execute(
+                    "INSERT INTO WorkspaceFileContent (id, workspaceId, filename, content) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE content = VALUES(content)",
+                    f
+                )
+                
         return jsonify({"id": workspace_id, "name": name})
+    finally:
+        conn.close()
+
+@workspace_bp.route("/<workspace_id>/files", methods=["POST"])
+@login_required
+def upload_files(workspace_id):
+    data = request.json
+    files = data.get("files", [])
+    
+    if not files:
+        return jsonify({"error": "No files provided"}), 400
+        
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Check permission
+            cursor.execute("SELECT id FROM WorkspaceMember WHERE workspaceId = %s AND userId = %s", (workspace_id, g.user["id"]))
+            if not cursor.fetchone():
+                return jsonify({"error": "Not authorized"}), 403
+                
+            for f in files:
+                cursor.execute(
+                    "INSERT INTO WorkspaceFileContent (id, workspaceId, filename, content) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE content = VALUES(content)",
+                    (str(uuid.uuid4()), workspace_id, f["filename"], f["content"])
+                )
+        return jsonify({"success": True})
+    finally:
+        conn.close()
+
+@workspace_bp.route("/<workspace_id>/files/<path:filename>/initial", methods=["GET"])
+@login_required
+def get_initial_file_content(workspace_id, filename):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Check permission
+            cursor.execute("SELECT id FROM WorkspaceMember WHERE workspaceId = %s AND userId = %s", (workspace_id, g.user["id"]))
+            if not cursor.fetchone():
+                return jsonify({"error": "Not authorized"}), 403
+                
+            cursor.execute("SELECT content FROM WorkspaceFileContent WHERE workspaceId = %s AND filename = %s", (workspace_id, filename))
+            row = cursor.fetchone()
+            if not row:
+                return jsonify({"error": "File not found"}), 404
+                
+            return jsonify({"content": row["content"]})
     finally:
         conn.close()
 
@@ -116,17 +201,16 @@ def get_workspace(workspace_id):
                     "color": m.pop("user.color")
                 }
             workspace["members"] = members
-            lang = workspace.get("language", "").lower()
-            if lang == "python":
-                workspace["files"] = ["main.py", "requirements.txt", "README.md"]
-            elif lang == "c":
-                workspace["files"] = ["main.c", "Makefile", "README.md"]
-            elif lang == "java":
-                workspace["files"] = ["src/Main.java", "pom.xml", "README.md"]
-            elif lang == "sql":
-                workspace["files"] = ["schema.sql", "queries.sql", "README.md"]
-            else:
-                workspace["files"] = ["src/index.ts", "package.json", "docs/README.md"]
+            
+            files = get_workspace_files(workspace_id, cursor)
+            if not files:
+                lang = workspace.get("language", "").lower()
+                if lang == "python": files = ["main.py", "requirements.txt", "README.md"]
+                elif lang == "c": files = ["main.c", "Makefile", "README.md"]
+                elif lang == "java": files = ["src/Main.java", "pom.xml", "README.md"]
+                elif lang == "sql": files = ["schema.sql", "queries.sql", "README.md"]
+                else: files = ["src/index.ts", "package.json", "docs/README.md"]
+            workspace["files"] = files
             
             return jsonify(workspace)
     finally:

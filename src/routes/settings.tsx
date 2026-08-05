@@ -65,9 +65,22 @@ function SettingsPage() {
   // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
     if (!displayName.trim()) { show("Display name is required", "error"); return; }
-    show("Profile saved successfully", "success");
+    try {
+      const res = await fetch(`${API_URL}/api/auth/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: displayName, avatar: avatarUrl })
+      });
+      if (res.ok) {
+        show("Profile saved successfully", "success");
+      } else {
+        show("Failed to save profile", "error");
+      }
+    } catch (err) {
+      show("Error saving profile", "error");
+    }
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,13 +93,13 @@ function SettingsPage() {
     reader.onload = async () => {
       const base64 = reader.result as string;
       try {
-        const res = await fetch(`${API_URL}/api/me/avatar`, {
+        const res = await fetch(`${API_URL}/api/auth/profile`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`
           },
-          body: JSON.stringify({ avatar: base64 })
+          body: JSON.stringify({ name: displayName, avatar: base64 })
         });
         if (res.ok) {
           setAvatarUrl(base64);

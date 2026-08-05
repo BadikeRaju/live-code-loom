@@ -1238,7 +1238,7 @@ const defaultContent = (filename: string) => {
 };
 
 function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment, onResolveComment, onReplyComment }: { filename: string; workspaceId: string; onCommentsChange: (c: CommentData[]) => void; onRequestComment: (p: { start: string, end: string }) => void; onResolveComment?: (id: string) => void; onReplyComment?: (id: string, text: string) => void; }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   const language = filename.endsWith(".ts") || filename.endsWith(".tsx") ? "typescript"
     : filename.endsWith(".json") ? "json"
@@ -1256,9 +1256,32 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
 
   useEffect(() => {
     if (ytext.toString().length === 0) {
-      ytext.insert(0, defaultContent(filename));
+      let isMounted = true;
+      const fetchInitial = async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/workspaces/${workspaceId}/files/${encodeURIComponent(filename)}/initial`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok && isMounted) {
+            const data = await res.json();
+            if (ytext.toString().length === 0) {
+              ytext.insert(0, data.content || defaultContent(filename));
+            }
+          } else if (isMounted) {
+            if (ytext.toString().length === 0) {
+              ytext.insert(0, defaultContent(filename));
+            }
+          }
+        } catch {
+          if (isMounted && ytext.toString().length === 0) {
+            ytext.insert(0, defaultContent(filename));
+          }
+        }
+      };
+      fetchInitial();
+      return () => { isMounted = false; };
     }
-  }, [ytext, filename]);
+  }, [ytext, filename, workspaceId, token]);
 
   // Dynamic CSS injection for remote collaborative cursors and selections
   useEffect(() => {

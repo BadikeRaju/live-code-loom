@@ -880,20 +880,6 @@ function ImportFolderModal({
             {error && <span className="text-rose-400">{error}</span>}
           </label>
 
-          <div className="flex flex-col gap-1.5 text-xs font-medium text-zinc-400">
-            Primary language
-            <div className="flex flex-wrap gap-1.5">
-              {LANGUAGES.map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setLanguage(l)}
-                  className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${language === l ? "border-brand bg-brand/10 text-brand" : "border-zinc-700 text-zinc-400 hover:border-zinc-600"}`}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
-          </div>
 
           <div className="flex flex-col gap-1.5 text-xs font-medium text-zinc-400">
             Select files

@@ -64,3 +64,31 @@ def get_me():
     user = dict(g.user)
     user.pop("password", None)
     return jsonify({"user": user})
+
+@auth_bp.route("/profile", methods=["PUT"])
+@login_required
+def update_profile():
+    data = request.json
+    name = data.get("name")
+    avatar = data.get("avatar")
+    user_id = g.user["id"]
+    
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+        
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE User SET name = %s, avatar = %s WHERE id = %s",
+                (name, avatar, user_id)
+            )
+            # Fetch updated user
+            cursor.execute("SELECT * FROM User WHERE id = %s", (user_id,))
+            user = cursor.fetchone()
+            if user:
+                user.pop("password", None)
+            return jsonify({"success": True, "user": user})
+    finally:
+        conn.close()
+

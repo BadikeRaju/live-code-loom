@@ -63,9 +63,26 @@ def init_db():
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY doc_idx (workspaceId, filename)
     );
+
+    CREATE TABLE IF NOT EXISTS WorkspaceFileContent (
+        id VARCHAR(191) PRIMARY KEY,
+        workspaceId VARCHAR(191) NOT NULL,
+        filename VARCHAR(191) NOT NULL,
+        content LONGTEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY wfile_idx (workspaceId, filename)
+    );
     """
     try:
         conn = get_connection()
+        with conn.cursor() as cursor:
+            # Upgrade avatar to LONGTEXT if needed (ignoring errors if it already is)
+            try:
+                cursor.execute("ALTER TABLE User MODIFY avatar LONGTEXT;")
+            except Exception:
+                pass
+
         with conn.cursor() as cursor:
             for stmt in schema.strip().split(';'):
                 if stmt.strip():
