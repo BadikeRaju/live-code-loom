@@ -26,6 +26,10 @@ app.register_blueprint(auth_bp, url_prefix="/api")
 app.register_blueprint(workspace_bp, url_prefix="/api/workspaces")
 app.register_blueprint(notification_bp, url_prefix="/api/notifications")
 
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return {"status": "up", "service": "live-code-loom"}, 200
+
 # Serve React static assets (JS/CSS)
 @app.route('/assets/<path:path>')
 def serve_assets(path):
