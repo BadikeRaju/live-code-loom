@@ -342,8 +342,15 @@ def commit_and_push(workspace_id):
                 if res.status_code != 200:
                     return jsonify({"error": f"Failed to fetch branch ref: {res.text}"}), 400
             ref_data = res.json()
-            base_tree_sha = ref_data["object"]["sha"]
+            commit_sha = ref_data["object"]["sha"]
             branch_ref = ref_data["ref"]
+            
+            # Fetch the commit to get its tree SHA
+            res = requests.get(f"{api_base}/git/commits/{commit_sha}", headers=headers)
+            if res.status_code != 200:
+                return jsonify({"error": f"Failed to fetch commit: {res.text}"}), 400
+            commit_data = res.json()
+            base_tree_sha = commit_data["tree"]["sha"]
             
             # B) Create Tree
             tree = []
@@ -363,7 +370,7 @@ def commit_and_push(workspace_id):
             res = requests.post(f"{api_base}/git/commits", headers=headers, json={
                 "message": msg,
                 "tree": new_tree_sha,
-                "parents": [base_tree_sha]
+                "parents": [commit_sha]
             })
             if res.status_code != 201: return jsonify({"error": f"Failed to create commit: {res.text}"}), 400
             new_commit_sha = res.json()["sha"]
