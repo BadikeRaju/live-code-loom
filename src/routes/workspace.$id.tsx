@@ -1326,11 +1326,25 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
               background-color: ${color}33 !important;
             }
             .yRemoteSelectionHead-${clientId} {
-              border-color: ${color} !important;
+              position: absolute;
+              border-left: 2px solid ${color} !important;
+              box-sizing: border-box;
             }
             .yRemoteSelectionHead-${clientId}::after {
-              content: "${name}" !important;
-              background-color: ${color} !important;
+              position: absolute;
+              content: "${name}";
+              top: -16px;
+              left: 0;
+              color: white;
+              font-size: 11px;
+              padding: 1px 4px;
+              border-radius: 4px;
+              white-space: nowrap;
+              pointer-events: none;
+              background-color: ${color};
+              z-index: 50;
+              line-height: 1.2;
+              font-family: sans-serif;
             }
           `;
         }
