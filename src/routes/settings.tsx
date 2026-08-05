@@ -45,13 +45,10 @@ function SettingsPage() {
 
   useEffect(() => {
     if (user) {
-      setDisplayName(user.name || "");
+      setDisplayName(user.name);
+      setEmail(user.email);
       setAvatarUrl(user.avatar || null);
-      try {
-        setGithubToken(user.githubToken ? atob(user.githubToken) : "");
-      } catch {
-        setGithubToken(user.githubToken || ""); // fallback if it was saved unencoded previously
-      }
+      setGithubToken(user.githubToken || "");
     }
   }, [user]);
 
@@ -74,20 +71,18 @@ function SettingsPage() {
   const saveProfile = async () => {
     if (!displayName.trim()) { show("Display name is required", "error"); return; }
     try {
-      const encodedToken = githubToken ? btoa(githubToken) : "";
-      const res = await fetch(`${API_URL}/api/auth/profile`, {
+      const res = await fetch(`${API_URL}/api/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: displayName, avatar: avatarUrl, githubToken: encodedToken })
+        body: JSON.stringify({ name: displayName, avatar: avatarUrl, githubToken })
       });
-      const data = await res.json();
       if (res.ok) {
         show("Profile saved successfully", "success");
       } else {
-        show(data.error || "Failed to save profile", "error");
+        show("Failed to save profile", "error");
       }
-    } catch (err: any) {
-      show(err.message || "Error saving profile", "error");
+    } catch (err) {
+      show("Error saving profile", "error");
     }
   };
 
@@ -101,27 +96,40 @@ function SettingsPage() {
     reader.onload = async () => {
       const base64 = reader.result as string;
       try {
-        const res = await fetch(`${API_URL}/api/auth/profile`, {
+        const res = await fetch(`${API_URL}/api/profile`, {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ name: displayName, avatar: base64 })
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name: displayName, avatar: base64, githubToken })
         });
         if (res.ok) {
           setAvatarUrl(base64);
           setAvatar(base64);
-          show("Avatar updated successfully", "success");
+          show("Avatar updated", "success");
         } else {
           show("Failed to update avatar", "error");
         }
-      } catch (err) {
-        show("Failed to upload avatar", "error");
+      } catch {
+        show("Upload failed", "error");
       }
     };
     reader.readAsDataURL(file);
-    e.target.value = "";
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/account`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        localStorage.clear();
+        window.location.href = '/login';
+      } else {
+        show("Failed to delete account", "error");
+      }
+    } catch (err) {
+      show("Error deleting account", "error");
+    }
   };
 
   const disconnectGithub = () => {
@@ -159,7 +167,7 @@ function SettingsPage() {
       {/* Modals */}
       {showPasswordModal && <PasswordModal onClose={() => setShowPasswordModal(false)} onSave={() => { setShowPasswordModal(false); show("Password changed", "success"); }} />}
       {show2FAModal && <TwoFAModal onClose={() => setShow2FAModal(false)} onEnable={() => { setShow2FAModal(false); setTwoFA(true); show("Two-factor auth enabled", "success"); }} />}
-      {showDeleteModal && <DeleteModal onClose={() => setShowDeleteModal(false)} onDelete={() => { setShowDeleteModal(false); show("Account deleted", "error"); }} />}
+      {showDeleteModal && <DeleteModal onClose={() => setShowDeleteModal(false)} onDelete={() => { setShowDeleteModal(false); handleDeleteAccount(); }} />}
 
       <div className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">Settings</h1>

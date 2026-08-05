@@ -84,14 +84,42 @@ def update_profile():
                 "UPDATE User SET name = %s, avatar = %s, githubToken = %s WHERE id = %s",
                 (name, avatar, github_token, user_id)
             )
-            conn.commit()
-            
             # Fetch updated user
             cursor.execute("SELECT * FROM User WHERE id = %s", (user_id,))
             user = cursor.fetchone()
             if user:
                 user.pop("password", None)
             return jsonify({"success": True, "user": user})
+    finally:
+        conn.close()
+
+@auth_bp.route("/account", methods=["DELETE"])
+@login_required
+def delete_account():
+    user_id = g.user["id"]
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Delete user's workspaces
+            cursor.execute("SELECT id FROM Workspace WHERE id IN (SELECT workspaceId FROM WorkspaceMember WHERE userId = %s AND role = 'owner')", (user_id,))
+            workspaces = cursor.fetchall()
+            for w in workspaces:
+                w_id = w["id"]
+                cursor.execute("DELETE FROM DocumentState WHERE workspaceId = %s", (w_id,))
+                cursor.execute("DELETE FROM WorkspaceFileContent WHERE workspaceId = %s", (w_id,))
+                cursor.execute("DELETE FROM WorkspaceMember WHERE workspaceId = %s", (w_id,))
+                cursor.execute("DELETE FROM Workspace WHERE id = %s", (w_id,))
+            
+            # Delete user from other workspaces they joined
+            cursor.execute("DELETE FROM WorkspaceMember WHERE userId = %s", (user_id,))
+            
+            # Delete notifications
+            cursor.execute("DELETE FROM Notification WHERE userId = %s", (user_id,))
+            
+            # Delete the user
+            cursor.execute("DELETE FROM User WHERE id = %s", (user_id,))
+            
+            return jsonify({"success": True})
     except Exception as e:
         import traceback
         traceback.print_exc()
