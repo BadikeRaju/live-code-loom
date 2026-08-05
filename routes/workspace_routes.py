@@ -254,7 +254,23 @@ def share_workspace(workspace_id):
             )
             
             send_email(email, f"You've been added to {w_name}", f"You can now access the workspace on CoFlux.")
-            return jsonify({"success": True})
+            
+            # Fetch target user details to return to frontend
+            cursor.execute("SELECT name, avatar, color FROM User WHERE id = %s", (target["id"],))
+            user_info = cursor.fetchone()
+            
+            return jsonify({
+                "success": True, 
+                "member": {
+                    "userId": target["id"],
+                    "role": role,
+                    "user": {
+                        "name": user_info["name"],
+                        "avatar": user_info["avatar"],
+                        "color": user_info["color"]
+                    }
+                }
+            })
     finally:
         conn.close()
 

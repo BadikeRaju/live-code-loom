@@ -256,9 +256,23 @@ function WorkspacePage() {
     }, 800);
   };
 
-  const handleInvite = (email: string) => {
-    setShowInviteModal(false);
-    show(`Invited ${email} to ${workspace.name}`, "success");
+  const handleInvite = async (email: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces/${workspaceId}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        show(data.error || "Failed to invite user", "error");
+      } else {
+        setShowInviteModal(false);
+        show(`Invited ${email} to ${workspace.name}`, "success");
+      }
+    } catch (err) {
+      show("Error inviting user", "error");
+    }
   };
 
   // Commit

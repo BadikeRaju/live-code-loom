@@ -128,7 +128,16 @@ function Dashboard() {
       });
       const data = await res.json();
       if (!res.ok) alert(data.error);
-      else alert("Shared successfully!");
+      else {
+        alert("Shared successfully!");
+        if (data.member) {
+          setAllWorkspaces(prev => prev.map(ws => 
+            ws.id === w.id 
+              ? { ...ws, members: [...(ws.members || []), data.member] }
+              : ws
+          ));
+        }
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -574,9 +583,9 @@ function Dashboard() {
                       Created: {new Date(w.createdAt).toLocaleString()}
                     </span>
                     <div className="flex -space-x-1.5">
-                      {w.members.slice(0, 3).map((m) => (
-                        <span key={m.id} className={`grid size-5 place-items-center rounded-full ${m.color} text-[9px] font-bold text-zinc-950 ring-1 ring-panel`} title={m.name}>
-                          {m.initials}
+                      {w.members.slice(0, 3).map((m: any) => (
+                        <span key={m.userId} className={`grid size-5 place-items-center rounded-full text-[9px] font-bold text-zinc-950 ring-1 ring-panel`} style={{ backgroundColor: m.user?.color || '#10b981' }} title={m.user?.name}>
+                          {m.user?.name?.slice(0, 2).toUpperCase() || "U"}
                         </span>
                       ))}
                     </div>
