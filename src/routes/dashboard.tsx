@@ -250,7 +250,8 @@ function Dashboard() {
                 body: JSON.stringify({
                   name: name || repoUrl.split("/").pop()?.replace(".git", "") || "cloned-repo",
                   language: "TypeScript",
-                  description: `Cloned from ${repoUrl}`
+                  description: `Cloned from ${repoUrl}`,
+                  repoUrl
                 })
               });
               if (!res.ok) { alert("Failed to create workspace"); return; }

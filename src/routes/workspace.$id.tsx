@@ -1284,7 +1284,8 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
       let isMounted = true;
       const fetchInitial = async () => {
         try {
-          const res = await fetch(`${API_URL}/api/workspaces/${workspaceId}/files/${encodeURIComponent(filename)}/initial`, {
+          const safeFilename = filename.split('/').map(encodeURIComponent).join('/');
+          const res = await fetch(`${API_URL}/api/workspaces/${workspaceId}/files/${safeFilename}/initial`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (res.ok && isMounted) {
