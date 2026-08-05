@@ -106,8 +106,8 @@ def create_workspace():
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO Workspace (id, name, description, language) VALUES (%s, %s, %s, %s)",
-                (workspace_id, name, description, language)
+                "INSERT INTO Workspace (id, name, description, language, repoUrl) VALUES (%s, %s, %s, %s, %s)",
+                (workspace_id, name, description, language, repo_url)
             )
             cursor.execute(
                 "INSERT INTO WorkspaceMember (id, workspaceId, userId, role) VALUES (%s, %s, %s, 'owner')",
