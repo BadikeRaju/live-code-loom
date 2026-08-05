@@ -639,63 +639,7 @@ function Dashboard() {
           )}
         </section>
 
-        {/* Activity + notifications */}
-        <section className="mt-12 grid gap-6 md:grid-cols-3">
-          <div className="rounded-xl border border-zinc-800 bg-panel md:col-span-2">
-            <header className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
-              <h2 className="text-sm font-medium text-zinc-100">Recent activity</h2>
-              <a href="#" className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 hover:text-zinc-300">
-                view all →
-              </a>
-            </header>
-            <ul className="divide-y divide-zinc-800 text-sm">
-              {[
-                { who: "Alex Morgan", action: "pushed to", target: "mercury-api-gateway / main", when: "2m" },
-                { who: "Jordan Lee", action: "commented on", target: "flux-ui-kit / Button.tsx:24", when: "18m" },
-                { who: "Priya Shah", action: "created", target: "atlas-docs / RFC-0012.md", when: "1h" },
-                { who: "Marcus Chen", action: "restored version v4 of", target: "orbit-schema-lab", when: "3h" },
-                { who: "Alex Morgan", action: "invited Raju Kumar to", target: "helios-marketing", when: "yesterday" },
-              ].map((a, i) => (
-                <li key={i} className="flex items-start gap-3 px-5 py-3.5">
-                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-brand" />
-                  <p className="min-w-0 flex-1 text-zinc-300">
-                    <span className="font-medium text-zinc-100">{a.who}</span>{" "}
-                    <span className="text-zinc-500">{a.action}</span>{" "}
-                    <span className="font-mono text-zinc-300">{a.target}</span>
-                  </p>
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-                    {a.when}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
 
-          <div className="rounded-xl border border-zinc-800 bg-panel">
-            <header className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
-              <h2 className="text-sm font-medium text-zinc-100">Notifications</h2>
-              <span className="rounded-full bg-brand/15 px-1.5 py-0.5 font-mono text-[10px] text-brand">
-                {notifications.filter((n) => n.unread).length} new
-              </span>
-            </header>
-            <ul className="divide-y divide-zinc-800">
-              {notifications.map((n) => (
-                <li key={n.id} className="flex gap-3 px-5 py-3.5 hover:bg-white/[0.02] cursor-pointer">
-                  <span
-                    className={
-                      "mt-1.5 size-1.5 shrink-0 rounded-full " + (n.unread ? "bg-brand" : "bg-zinc-700")
-                    }
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-zinc-100">{n.title}</p>
-                    <p className="truncate text-xs text-zinc-500">{n.body}</p>
-                  </div>
-                  <span className="font-mono text-[10px] uppercase text-zinc-600">{n.when}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
       </div>
     </AppShell>
   );
