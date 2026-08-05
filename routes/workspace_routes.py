@@ -289,9 +289,15 @@ def commit_and_push(workspace_id):
             # 1. Get user's githubToken
             cursor.execute("SELECT githubToken FROM User WHERE id = %s", (g.user["id"],))
             token_row = cursor.fetchone()
-            if not token_row or not token_row.get("githubToken"):
-                return jsonify({"error": "GitHub Personal Access Token is required. Please set it in Settings."}), 400
-            token = token_row["githubToken"]
+            github_token_encoded = token_row.get("githubToken") if token_row else None
+        
+            if not github_token_encoded:
+                return jsonify({"error": "GitHub PAT is required. Connect it in Settings."}), 400
+                
+            try:
+                token = base64.b64decode(github_token_encoded).decode("utf-8")
+            except:
+                token = github_token_encoded # fallback if not base64 encoded
             
             # 2. Get workspace repoUrl
             cursor.execute("SELECT repoUrl FROM Workspace WHERE id = %s", (workspace_id,))

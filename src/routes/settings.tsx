@@ -45,10 +45,13 @@ function SettingsPage() {
 
   useEffect(() => {
     if (user) {
-      setDisplayName(user.name);
-      setEmail(user.email);
+      setDisplayName(user.name || "");
       setAvatarUrl(user.avatar || null);
-      setGithubToken(user.githubToken || "");
+      try {
+        setGithubToken(user.githubToken ? atob(user.githubToken) : "");
+      } catch {
+        setGithubToken(user.githubToken || ""); // fallback if it was saved unencoded previously
+      }
     }
   }, [user]);
 
@@ -71,18 +74,20 @@ function SettingsPage() {
   const saveProfile = async () => {
     if (!displayName.trim()) { show("Display name is required", "error"); return; }
     try {
+      const encodedToken = githubToken ? btoa(githubToken) : "";
       const res = await fetch(`${API_URL}/api/auth/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: displayName, avatar: avatarUrl, githubToken })
+        body: JSON.stringify({ name: displayName, avatar: avatarUrl, githubToken: encodedToken })
       });
+      const data = await res.json();
       if (res.ok) {
         show("Profile saved successfully", "success");
       } else {
-        show("Failed to save profile", "error");
+        show(data.error || "Failed to save profile", "error");
       }
-    } catch (err) {
-      show("Error saving profile", "error");
+    } catch (err: any) {
+      show(err.message || "Error saving profile", "error");
     }
   };
 

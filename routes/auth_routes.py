@@ -84,12 +84,18 @@ def update_profile():
                 "UPDATE User SET name = %s, avatar = %s, githubToken = %s WHERE id = %s",
                 (name, avatar, github_token, user_id)
             )
+            conn.commit()
+            
             # Fetch updated user
             cursor.execute("SELECT * FROM User WHERE id = %s", (user_id,))
             user = cursor.fetchone()
             if user:
                 user.pop("password", None)
             return jsonify({"success": True, "user": user})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
 
