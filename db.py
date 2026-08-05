@@ -73,6 +73,16 @@ def init_db():
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY wfile_idx (workspaceId, filename)
     );
+
+    CREATE TABLE IF NOT EXISTS Notification (
+        id VARCHAR(191) PRIMARY KEY,
+        userId VARCHAR(191) NOT NULL,
+        title VARCHAR(191) NOT NULL,
+        body TEXT,
+        unread BOOLEAN DEFAULT TRUE,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     """
     try:
         conn = get_connection()
@@ -80,6 +90,16 @@ def init_db():
             # Upgrade avatar to LONGTEXT if needed (ignoring errors if it already is)
             try:
                 cursor.execute("ALTER TABLE User MODIFY avatar LONGTEXT;")
+            except Exception:
+                pass
+            
+            try:
+                cursor.execute("ALTER TABLE User ADD COLUMN githubToken VARCHAR(255);")
+            except Exception:
+                pass
+
+            try:
+                cursor.execute("ALTER TABLE Workspace ADD COLUMN repoUrl VARCHAR(255);")
             except Exception:
                 pass
 

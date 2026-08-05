@@ -241,8 +241,7 @@ function WorkspacePage() {
 
   // Push to GitHub
   const handlePush = () => {
-    show("Pushing to GitHub…", "info");
-    setTimeout(() => show("✓ Pushed to origin/main (3 commits)", "success"), 1500);
+    handleCommit("Sync to GitHub", true);
   };
 
   // ZIP download (simulated)
@@ -263,18 +262,30 @@ function WorkspacePage() {
   };
 
   // Commit
-  const handleCommit = (msg: string, andPush: boolean) => {
+  const handleCommit = async (msg: string, andPush: boolean) => {
     if (!msg.trim()) { show("Commit message is required", "error"); return; }
     show(`Committing: "${msg}"…`, "info");
-    setTimeout(() => {
-      const label = `v0.${14 + versionHistory.length}.${versionHistory.length}`;
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces/${workspaceId}/commit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: msg })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        show(data.error || "Failed to commit", "error");
+        return;
+      }
+      const label = data.sha ? data.sha.substring(0, 7) : `v0.${14 + versionHistory.length}`;
       setVersionHistory((prev) => [
         { id: `v${Date.now()}`, label, author: "You", when: "just now", note: msg },
         ...prev,
       ]);
       setTabs((prev) => prev.map((t) => ({ ...t, dirty: false })));
-      show(`✓ Committed as ${label}${andPush ? " and pushed" : ""}`, "success");
-    }, 1000);
+      show(`✓ Committed and pushed to GitHub`, "success");
+    } catch (err) {
+      show("Error committing to GitHub", "error");
+    }
   };
 
   // Recursively add a node inside a parent folder (or root if no parentId)

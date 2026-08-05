@@ -63,7 +63,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   const markAllRead = () => setNotifications((n) => n.map((x) => ({ ...x, unread: false })));
-  const markRead = (id: string) => setNotifications((n) => n.map((x) => x.id === id ? { ...x, unread: false } : x));
+  const markRead = async (id: string) => {
+    setNotifications((n) => n.map((x) => x.id === id ? { ...x, unread: false } : x));
+    try {
+      await fetch(`${API_URL}/api/notifications/${id}/read`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const searchResults = searchQuery.trim()
     ? workspaces.filter(

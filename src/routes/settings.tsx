@@ -41,11 +41,14 @@ function SettingsPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatar || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [githubToken, setGithubToken] = useState(user?.githubToken || "");
+
   useEffect(() => {
     if (user) {
       setDisplayName(user.name);
       setEmail(user.email);
       setAvatarUrl(user.avatar || null);
+      setGithubToken(user.githubToken || "");
     }
   }, [user]);
 
@@ -71,7 +74,7 @@ function SettingsPage() {
       const res = await fetch(`${API_URL}/api/auth/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: displayName, avatar: avatarUrl })
+        body: JSON.stringify({ name: displayName, avatar: avatarUrl, githubToken })
       });
       if (res.ok) {
         show("Profile saved successfully", "success");
@@ -225,67 +228,22 @@ function SettingsPage() {
 
           {/* GitHub */}
           <Section title="GitHub" subtitle="Push workspaces directly to your repositories.">
-            <div className="flex items-center justify-between rounded-md border border-zinc-800 bg-surface p-4">
-              <div className="flex items-center gap-3">
-                <Github className="size-5 text-zinc-300" />
-                <div>
-                  {githubConnected ? (
-                    <>
-                      <p className="text-sm font-medium text-zinc-100">Connected as @alex-morgan</p>
-                      <p className="text-xs text-zinc-500">3 repositories linked · last push 2m ago</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm font-medium text-zinc-400">Not connected</p>
-                      <p className="text-xs text-zinc-600">Connect to push workspaces to GitHub</p>
-                    </>
-                  )}
-                </div>
+            <div className="flex flex-col gap-3">
+              <Field 
+                label="Personal Access Token (PAT)" 
+                value={githubToken} 
+                onChange={setGithubToken} 
+                type="password" 
+              />
+              <p className="text-xs text-zinc-500">Requires `repo` scope to commit and push to your repositories.</p>
+              <div className="flex justify-end">
+                <button
+                  onClick={saveProfile}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-brand px-4 py-2 text-xs font-medium text-brand-foreground hover:brightness-110"
+                >
+                  <Save className="size-3.5" /> Save GitHub Token
+                </button>
               </div>
-              {githubConnected ? (
-                <button
-                  onClick={disconnectGithub}
-                  className="rounded-md border border-rose-800/50 bg-rose-950/30 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-900/40"
-                >
-                  Disconnect
-                </button>
-              ) : (
-                <button
-                  onClick={connectGithub}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white"
-                >
-                  <Github className="size-3.5" /> Connect
-                </button>
-              )}
-            </div>
-          </Section>
-
-          {/* Appearance */}
-          <Section title="Appearance" subtitle="CoFlux is dark-first — for now.">
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { name: "Obsidian", gradient: "from-zinc-800 to-zinc-950" },
-                { name: "Dim", gradient: "from-slate-700 to-slate-900" },
-                { name: "System", gradient: "from-blue-900 to-slate-800" },
-              ].map((t) => (
-                <button
-                  key={t.name}
-                  onClick={() => changeTheme(t.name)}
-                  className={
-                    "flex flex-col gap-2 rounded-lg border p-3 text-left transition-all " +
-                    (theme === t.name
-                      ? "border-brand/40 bg-brand/5 ring-1 ring-brand/20"
-                      : "border-zinc-800 bg-panel hover:border-zinc-700")
-                  }
-                >
-                  <div className={`aspect-video rounded bg-gradient-to-br ${t.gradient} relative`}>
-                    {theme === t.name && (
-                      <CheckCircle2 className="absolute right-1.5 top-1.5 size-4 text-brand" />
-                    )}
-                  </div>
-                  <span className="text-xs font-medium text-zinc-200">{t.name}</span>
-                </button>
-              ))}
             </div>
           </Section>
 

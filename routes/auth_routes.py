@@ -71,6 +71,7 @@ def update_profile():
     data = request.json
     name = data.get("name")
     avatar = data.get("avatar")
+    github_token = data.get("githubToken")
     user_id = g.user["id"]
     
     if not name:
@@ -80,8 +81,8 @@ def update_profile():
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "UPDATE User SET name = %s, avatar = %s WHERE id = %s",
-                (name, avatar, user_id)
+                "UPDATE User SET name = %s, avatar = %s, githubToken = %s WHERE id = %s",
+                (name, avatar, github_token, user_id)
             )
             # Fetch updated user
             cursor.execute("SELECT * FROM User WHERE id = %s", (user_id,))

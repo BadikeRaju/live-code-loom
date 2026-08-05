@@ -247,7 +247,120 @@ def share_workspace(workspace_id):
             cursor.execute("SELECT name FROM Workspace WHERE id = %s", (workspace_id,))
             w_name = cursor.fetchone()["name"]
             
+            # Insert Notification
+            cursor.execute(
+                "INSERT INTO Notification (id, userId, title, body) VALUES (%s, %s, %s, %s)",
+                (str(uuid.uuid4()), target["id"], "Workspace Invite", f"{g.user['name']} invited you to '{w_name}'")
+            )
+            
             send_email(email, f"You've been added to {w_name}", f"You can now access the workspace on CoFlux.")
             return jsonify({"success": True})
+    finally:
+        conn.close()
+
+import requests
+import base64
+import y_py as Y
+
+@workspace_bp.route("/<workspace_id>/commit", methods=["POST"])
+@login_required
+def commit_and_push(workspace_id):
+    msg = request.json.get("message", "Commit from CoFlux")
+    
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # 1. Get user's githubToken
+            cursor.execute("SELECT githubToken FROM User WHERE id = %s", (g.user["id"],))
+            token_row = cursor.fetchone()
+            if not token_row or not token_row.get("githubToken"):
+                return jsonify({"error": "GitHub Personal Access Token is required. Please set it in Settings."}), 400
+            token = token_row["githubToken"]
+            
+            # 2. Get workspace repoUrl
+            cursor.execute("SELECT repoUrl FROM Workspace WHERE id = %s", (workspace_id,))
+            ws_row = cursor.fetchone()
+            if not ws_row or not ws_row.get("repoUrl"):
+                return jsonify({"error": "Workspace is not linked to a GitHub repository."}), 400
+            repo_url = ws_row["repoUrl"]
+            
+            # Extract owner/repo from url: https://github.com/owner/repo.git
+            parts = repo_url.rstrip(".git").split("/")
+            if len(parts) < 2: return jsonify({"error": "Invalid repoUrl"}), 400
+            owner_repo = f"{parts[-2]}/{parts[-1]}"
+            
+            # 3. Get all files
+            files_content = {}
+            # Base files
+            cursor.execute("SELECT filename, content FROM WorkspaceFileContent WHERE workspaceId = %s", (workspace_id,))
+            for row in cursor.fetchall():
+                files_content[row["filename"]] = row["content"]
+                
+            # Live edits
+            cursor.execute("SELECT filename, state FROM DocumentState WHERE workspaceId = %s", (workspace_id,))
+            for row in cursor.fetchall():
+                if row["state"]:
+                    doc = Y.YDoc()
+                    try:
+                        Y.apply_update(doc, bytes(row["state"]))
+                        text = doc.get_text(row["filename"])
+                        files_content[row["filename"]] = str(text)
+                    except:
+                        pass
+                        
+            if not files_content:
+                return jsonify({"error": "No files to commit"}), 400
+
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+                "X-GitHub-Api-Version": "2022-11-28"
+            }
+            api_base = f"https://api.github.com/repos/{owner_repo}"
+            
+            # A) Get latest commit SHA on main
+            res = requests.get(f"{api_base}/git/refs/heads/main", headers=headers)
+            if res.status_code != 200:
+                # Try master
+                res = requests.get(f"{api_base}/git/refs/heads/master", headers=headers)
+                if res.status_code != 200:
+                    return jsonify({"error": f"Failed to fetch branch ref: {res.text}"}), 400
+            ref_data = res.json()
+            base_tree_sha = ref_data["object"]["sha"]
+            branch_ref = ref_data["ref"]
+            
+            # B) Create Tree
+            tree = []
+            for filepath, content in files_content.items():
+                tree.append({
+                    "path": filepath,
+                    "mode": "100644",
+                    "type": "blob",
+                    "content": content
+                })
+                
+            res = requests.post(f"{api_base}/git/trees", headers=headers, json={"base_tree": base_tree_sha, "tree": tree})
+            if res.status_code != 201: return jsonify({"error": f"Failed to create tree: {res.text}"}), 400
+            new_tree_sha = res.json()["sha"]
+            
+            # C) Create Commit
+            res = requests.post(f"{api_base}/git/commits", headers=headers, json={
+                "message": msg,
+                "tree": new_tree_sha,
+                "parents": [base_tree_sha]
+            })
+            if res.status_code != 201: return jsonify({"error": f"Failed to create commit: {res.text}"}), 400
+            new_commit_sha = res.json()["sha"]
+            
+            # D) Update Ref
+            res = requests.patch(f"{api_base}/git/{branch_ref}", headers=headers, json={"sha": new_commit_sha})
+            if res.status_code != 200: return jsonify({"error": f"Failed to push commit: {res.text}"}), 400
+            
+            return jsonify({"success": True, "sha": new_commit_sha})
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
