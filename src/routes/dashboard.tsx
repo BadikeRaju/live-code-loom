@@ -27,6 +27,7 @@ function Dashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCloneModal, setShowCloneModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showCollaboratorsModal, setShowCollaboratorsModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { user, isLoading, token } = useAuth();
   
@@ -261,6 +262,20 @@ function Dashboard() {
         />
       )}
 
+      {showCollaboratorsModal && (
+        <CollaboratorsModal
+          onClose={() => setShowCollaboratorsModal(false)}
+          collaborators={Array.from(
+            new Map(
+              allWorkspaces
+                .flatMap(w => w.members || [])
+                .filter(m => m.userId !== user?.id && m.user)
+                .map(m => [m.userId, m.user])
+            ).values()
+          )}
+        />
+      )}
+
       {showImportModal && (
         <ImportFolderModal
           onClose={() => setShowImportModal(false)}
@@ -356,12 +371,33 @@ function Dashboard() {
         {/* Stats row */}
         <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-zinc-800 bg-zinc-800 md:grid-cols-4">
           {[
-            { label: "Workspaces", value: allWorkspaces.length.toString(), foot: "3 owned · 3 joined" },
-            { label: "Collaborators", value: "12", foot: "across all workspaces" },
-            { label: "Commits · 30d", value: "148", foot: "+22% vs last month" },
-            { label: "Snapshots", value: "1,206", foot: "auto & manual" },
+            { 
+              label: "Workspaces", 
+              value: allWorkspaces.length.toString(), 
+              foot: `${allWorkspaces.filter(w => w.members?.some((m: any) => m.userId === user?.id && m.role === 'owner')).length} owned · ${allWorkspaces.filter(w => w.members?.some((m: any) => m.userId === user?.id && m.role !== 'owner')).length} joined` 
+            },
+            { 
+              label: "Collaborators", 
+              value: Array.from(new Set(allWorkspaces.flatMap(w => w.members?.map((m: any) => m.userId) || []))).filter(id => id !== user?.id).length.toString(), 
+              foot: "across all workspaces",
+              onClick: () => setShowCollaboratorsModal(true)
+            },
+            { 
+              label: "Linked Repos", 
+              value: allWorkspaces.filter(w => w.repoUrl).length.toString(), 
+              foot: "connected to GitHub" 
+            },
+            { 
+              label: "Total Files", 
+              value: allWorkspaces.reduce((acc, w) => acc + (w.files?.length || 0), 0).toString(), 
+              foot: "across workspaces" 
+            },
           ].map((s) => (
-            <div key={s.label} className="flex flex-col gap-1 bg-panel p-5">
+            <div 
+              key={s.label} 
+              onClick={s.onClick}
+              className={`flex flex-col gap-1 bg-panel p-5 ${s.onClick ? 'cursor-pointer hover:bg-zinc-900 transition-colors' : ''}`}
+            >
               <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
                 {s.label}
               </span>
@@ -928,6 +964,59 @@ function ImportFolderModal({
           >
             <FolderOpen className="size-3.5" /> Import project
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Collaborators Modal ---- */
+function CollaboratorsModal({
+  onClose,
+  collaborators,
+}: {
+  onClose: () => void;
+  collaborators: any[];
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-surface shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between border-b border-zinc-800 p-6">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-100">All Collaborators</h2>
+            <p className="text-xs text-zinc-500 mt-1">People you share workspaces with.</p>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X className="size-4" /></button>
+        </div>
+
+        <div className="overflow-y-auto p-6">
+          {collaborators.length === 0 ? (
+            <p className="text-sm text-zinc-400 text-center py-4">No collaborators yet.</p>
+          ) : (
+            <ul className="space-y-4">
+              {collaborators.map((user: any, i) => (
+                <li key={i} className="flex items-center gap-3">
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt="Avatar" className="size-8 shrink-0 rounded-full object-cover" />
+                  ) : (
+                    <span 
+                      className="grid size-8 shrink-0 place-items-center rounded-full text-[10px] font-bold text-zinc-950" 
+                      style={{ backgroundColor: user?.color || "#10b981" }}
+                    >
+                      {user?.name?.slice(0, 2).toUpperCase() || "U"}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-zinc-100">{user?.name || "Unknown"}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="border-t border-zinc-800 p-6">
+          <button onClick={onClose} className="w-full rounded-md border border-zinc-700 py-2 text-xs text-zinc-300 hover:bg-zinc-800">Close</button>
         </div>
       </div>
     </div>
