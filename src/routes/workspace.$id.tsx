@@ -1225,6 +1225,14 @@ function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
 const defaultContent = (filename: string) => {
   if (filename.endsWith(".ts") || filename.endsWith(".tsx")) {
     return `import { Router } from "express";\nimport { auth } from "./middleware";\n\n// Real-time collaborative session initialised\nconst router = Router();\n\nrouter.use(auth);\n\nrouter.get("/health", (req, res) => {\n  return res.status(200).send({ status: "up" });\n});\n\nexport default router;\n`;
+  } else if (filename.endsWith(".py")) {
+    return `def main():\n    print("Hello World")\n\nif __name__ == "__main__":\n    main()\n`;
+  } else if (filename.endsWith(".c")) {
+    return `#include <stdio.h>\n\nint main() {\n    printf("Hello World\\n");\n    return 0;\n}\n`;
+  } else if (filename.endsWith(".java")) {
+    return `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello World");\n    }\n}\n`;
+  } else if (filename.endsWith(".sql")) {
+    return `CREATE TABLE users (\n  id INT PRIMARY KEY,\n  name VARCHAR(255)\n);\n`;
   }
   return `// Start coding in ${filename}...\n`;
 };

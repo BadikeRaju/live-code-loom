@@ -38,8 +38,18 @@ def get_workspaces():
                     }
                 w["members"] = members
                 
-                # mock files list
-                w["files"] = ["src/index.ts", "package.json", "docs/README.md"]
+                # Determine files based on language
+                lang = w.get("language", "").lower()
+                if lang == "python":
+                    w["files"] = ["main.py", "requirements.txt", "README.md"]
+                elif lang == "c":
+                    w["files"] = ["main.c", "Makefile", "README.md"]
+                elif lang == "java":
+                    w["files"] = ["src/Main.java", "pom.xml", "README.md"]
+                elif lang == "sql":
+                    w["files"] = ["schema.sql", "queries.sql", "README.md"]
+                else:
+                    w["files"] = ["src/index.ts", "package.json", "docs/README.md"]
                 
         return jsonify(workspaces)
     finally:
@@ -106,7 +116,17 @@ def get_workspace(workspace_id):
                     "color": m.pop("user.color")
                 }
             workspace["members"] = members
-            workspace["files"] = ["src/index.ts", "package.json", "docs/README.md"]
+            lang = workspace.get("language", "").lower()
+            if lang == "python":
+                workspace["files"] = ["main.py", "requirements.txt", "README.md"]
+            elif lang == "c":
+                workspace["files"] = ["main.c", "Makefile", "README.md"]
+            elif lang == "java":
+                workspace["files"] = ["src/Main.java", "pom.xml", "README.md"]
+            elif lang == "sql":
+                workspace["files"] = ["schema.sql", "queries.sql", "README.md"]
+            else:
+                workspace["files"] = ["src/index.ts", "package.json", "docs/README.md"]
             
             return jsonify(workspace)
     finally:
