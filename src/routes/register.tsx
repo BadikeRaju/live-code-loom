@@ -70,8 +70,8 @@ function RegisterPage() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {error && <div className="text-red-500 text-sm font-medium">{error}</div>}
         <div className="grid grid-cols-2 gap-3">
-          <TextField name="firstName" label="First name" placeholder="Alex" autoFocus />
-          <TextField name="lastName" label="Last name" placeholder="Morgan" />
+          <TextField name="firstName" label="First name" placeholder="Raju" autoFocus />
+          <TextField name="lastName" label="Last name" placeholder="Badike" />
         </div>
         <TextField name="email" label="Work email" type="email" placeholder="you@company.dev" />
         <TextField name="password" label="Password" type="password" placeholder="At least 10 characters" />

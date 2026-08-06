@@ -305,9 +305,9 @@ function MockAppFrame() {
               <K>import</K> {"{ Router } "}<K>from</K> <S>"express"</S>;
             </CodeLine>
             <CodeLine n={2}>
-              <C>{"// Real-time — Alex is editing this line"}</C>
+              <C>{"// Real-time — Raju is editing this line"}</C>
             </CodeLine>
-            <CodeLine n={3} cursor="Alex" cursorColor="bg-emerald-500">
+            <CodeLine n={3} cursor="Raju" cursorColor="bg-emerald-500">
               <K>const</K> router = <Fn>Router</Fn>();
             </CodeLine>
             <CodeLine n={4}>&nbsp;</CodeLine>
@@ -345,7 +345,7 @@ function MockAppFrame() {
             <span className="flex-1 py-2 text-center text-zinc-500">Activity</span>
           </div>
           <div className="space-y-4 p-3">
-            <ChatBubble name="Alex M." color="text-emerald-400" time="14:02">
+            <ChatBubble name="Raju B." color="text-emerald-400" time="14:02">
               I've added the health check route. Ready for review?
             </ChatBubble>
             <ChatBubble name="Jordan L." color="text-sky-400" time="14:05">
