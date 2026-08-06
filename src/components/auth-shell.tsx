@@ -42,11 +42,10 @@ export function AuthShell({
           </blockquote>
           <div className="flex items-center gap-3">
             <span className="grid size-9 place-items-center rounded-full bg-emerald-500 text-xs font-bold text-zinc-950">
-              AM
+              RB
             </span>
             <div>
-              <p className="text-sm font-medium text-zinc-100">Alex Morgan</p>
-              <p className="text-xs text-zinc-500">Staff engineer, Halcyon Labs</p>
+              <p className="text-sm font-medium text-zinc-100">Raju Badike</p>
             </div>
           </div>
         </div>

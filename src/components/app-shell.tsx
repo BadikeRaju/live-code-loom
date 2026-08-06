@@ -163,12 +163,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               <img src={user.avatar} alt="Avatar" className="size-7 shrink-0 rounded-full object-cover" />
             ) : (
               <span className="grid size-7 shrink-0 place-items-center rounded-full text-[10px] font-bold text-zinc-950" style={{ backgroundColor: user?.color || "#10b981" }}>
-                {user?.name?.slice(0, 2).toUpperCase() || "AM"}
+                {user?.name?.slice(0, 2).toUpperCase() || "RB"}
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium text-zinc-100">{user?.name || "Alex Morgan"}</p>
-              <p className="truncate text-[10px] text-zinc-500">{user?.email || "alex@halcyon.dev"}</p>
+              <p className="truncate text-xs font-medium text-zinc-100">{user?.name || "Raju Badike"}</p>
+              <p className="truncate text-[10px] text-zinc-500">{user?.email || "rajubadike@example.com"}</p>
             </div>
             <Settings className="size-3.5 text-zinc-600 shrink-0" />
           </Link>
@@ -282,19 +282,19 @@ export function AppShell({ children }: { children: ReactNode }) {
                 onClick={() => setShowProfile((v) => !v)}
                 className={`grid size-8 place-items-center rounded-full ${!user?.avatar ? 'text-xs font-bold text-zinc-950' : ''} hover:ring-2 hover:ring-brand transition-all`}
                 style={!user?.avatar ? { backgroundColor: user?.color || "#10b981" } : undefined}
-                title={user?.name || "Alex Morgan"}
+                title={user?.name || "Raju Badike"}
               >
                 {user?.avatar ? (
                   <img src={user.avatar} alt="Avatar" className="size-full rounded-full object-cover" />
                 ) : (
-                  user?.name?.slice(0, 2).toUpperCase() || "AM"
+                  user?.name?.slice(0, 2).toUpperCase() || "RB"
                 )}
               </button>
               {showProfile && (
                 <div className="absolute right-0 top-10 z-50 w-52 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-zinc-800">
-                    <p className="text-sm font-semibold text-zinc-100">{user?.name || "Alex Morgan"}</p>
-                    <p className="text-xs text-zinc-500">{user?.email || "alex@halcyon.dev"}</p>
+                    <p className="text-sm font-semibold text-zinc-100">{user?.name || "Raju Badike"}</p>
+                    <p className="text-xs text-zinc-500">{user?.email || "rajubadike@example.com"}</p>
                   </div>
                   <div className="py-1">
                     <Link

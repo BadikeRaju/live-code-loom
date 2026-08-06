@@ -140,7 +140,7 @@ function SettingsPage() {
   };
 
   const connectGithub = () => {
-    setTimeout(() => { setGithubConnected(true); show("GitHub connected as @alex-morgan", "success"); }, 800);
+    setTimeout(() => { setGithubConnected(true); show("GitHub connected successfully", "success"); }, 800);
     show("Connecting to GitHub…", "info");
   };
 
