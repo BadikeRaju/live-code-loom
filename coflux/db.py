@@ -1,26 +1,28 @@
 import pymysql
 import pymysql.cursors
-from config import DATABASE_URL
-from urllib.parse import urlparse
+from django.conf import settings
+
 
 def get_connection():
-    if not DATABASE_URL:
+    """Return a raw PyMySQL connection using the parsed DATABASE_URL."""
+    params = settings.DB_PARAMS
+    if not params:
         raise ValueError("DATABASE_URL is not set")
-    
-    parsed = urlparse(DATABASE_URL)
-    
+
     return pymysql.connect(
-        host=parsed.hostname,
-        port=parsed.port or 3306,
-        user=parsed.username,
-        password=parsed.password,
-        database=parsed.path.lstrip("/"),
+        host=params["host"],
+        port=params["port"],
+        user=params["user"],
+        password=params["password"],
+        database=params["database"],
         cursorclass=pymysql.cursors.DictCursor,
-        ssl={"ssl_mode": "REQUIRED"} if "aivencloud" in (parsed.hostname or "") else None,
-        autocommit=True
+        ssl={"ssl_mode": "REQUIRED"} if params.get("ssl") else None,
+        autocommit=True,
     )
 
+
 def init_db():
+    """Create tables and run migrations on startup — identical to the old db.py."""
     schema = """
     CREATE TABLE IF NOT EXISTS User (
         id VARCHAR(191) PRIMARY KEY,
@@ -82,29 +84,26 @@ def init_db():
         unread BOOLEAN DEFAULT TRUE,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-
     """
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
-            # Upgrade avatar to LONGTEXT if needed (ignoring errors if it already is)
+            # Schema upgrades (safe to re-run)
             try:
                 cursor.execute("ALTER TABLE User MODIFY avatar LONGTEXT;")
             except Exception:
                 pass
-            
             try:
                 cursor.execute("ALTER TABLE User ADD COLUMN githubToken VARCHAR(255);")
             except Exception:
                 pass
-
             try:
                 cursor.execute("ALTER TABLE Workspace ADD COLUMN repoUrl VARCHAR(255);")
             except Exception:
                 pass
 
         with conn.cursor() as cursor:
-            for stmt in schema.strip().split(';'):
+            for stmt in schema.strip().split(";"):
                 if stmt.strip():
                     cursor.execute(stmt)
         conn.close()
