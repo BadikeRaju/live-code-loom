@@ -24,6 +24,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "coflux.middleware.ApiExceptionMiddleware",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
