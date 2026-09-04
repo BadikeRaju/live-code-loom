@@ -47,7 +47,7 @@ def _parse_db_url(url):
         "user": parsed.username,
         "password": parsed.password,
         "database": parsed.path.lstrip("/"),
-        "ssl": "aivencloud" in (parsed.hostname or ""),
+        "ssl": any(cloud in (parsed.hostname or "") for cloud in ["aivencloud", "tidbcloud"]),
     }
 
 DB_PARAMS = _parse_db_url(DATABASE_URL)
