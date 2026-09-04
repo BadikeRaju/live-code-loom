@@ -117,6 +117,9 @@ def create_workspace(request):
                                 files_to_insert.append((str(uuid.uuid4()), workspace_id, relpath, f.read()))
                         except UnicodeDecodeError:
                             pass
+            except subprocess.CalledProcessError as e:
+                err_msg = e.stderr.decode("utf-8", errors="ignore") if e.stderr else str(e)
+                return JsonResponse({"error": f"Failed to clone repository: {err_msg}"}, status=400)
             except Exception as e:
                 return JsonResponse({"error": f"Failed to clone repository: {str(e)}"}, status=400)
 
