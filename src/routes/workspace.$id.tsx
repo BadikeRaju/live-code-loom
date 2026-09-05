@@ -639,6 +639,7 @@ function WorkspacePage() {
                     workspaceId={workspace.id}
                     comments={commentsList.filter(c => c.filename === activeTab.id)}
                     user={user}
+                    token={token}
                     onRequestComment={(pos) => {
                       setPendingComment({ ...pos, filename: activeTab.id });
                       setRightSidebarOpen(true);
@@ -711,7 +712,7 @@ function WorkspacePage() {
                 const id = Math.random().toString(36).slice(2);
                 map.set(id, {
                   id,
-                  filename: active,
+                  filename: pendingComment.filename,
                   author: { id: user?.id, name: user?.name || "User", color: user?.color, avatar: user?.avatar },
                   content: text,
                   resolved: false,
@@ -1303,12 +1304,14 @@ function CodeEditor({
   workspaceId,
   comments,
   user,
+  token,
   onRequestComment
 }: {
   filename: string;
   workspaceId: string;
   comments: CommentData[];
   user: any;
+  token: string | null;
   onRequestComment?: (pos: { start: string; end: string }) => void;
 }) {
 
