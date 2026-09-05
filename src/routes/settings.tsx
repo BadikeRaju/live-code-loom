@@ -30,7 +30,7 @@ function useToast() {
 function SettingsPage() {
   const { toasts, show } = useToast();
 
-  const { user, token, setAvatar, updateUser } = useAuth();
+  const { user, token, setAvatar } = useAuth();
 
   // Profile state
   const [displayName, setDisplayName] = useState(user?.name || "");
@@ -77,7 +77,6 @@ function SettingsPage() {
         body: JSON.stringify({ name: displayName, avatar: avatarUrl, githubToken })
       });
       if (res.ok) {
-        updateUser({ name: displayName, githubToken });
         show("Profile saved successfully", "success");
       } else {
         show("Failed to save profile", "error");
@@ -91,7 +90,7 @@ function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) { show("File too large — max 5 MB", "error"); return; }
-    
+
     show("Uploading avatar...", "info");
     const reader = new FileReader();
     reader.onload = async () => {
@@ -105,7 +104,6 @@ function SettingsPage() {
         if (res.ok) {
           setAvatarUrl(base64);
           setAvatar(base64);
-          updateUser({ avatar: base64 });
           show("Avatar updated", "success");
         } else {
           show("Failed to update avatar", "error");
@@ -140,7 +138,7 @@ function SettingsPage() {
   };
 
   const connectGithub = () => {
-    setTimeout(() => { setGithubConnected(true); show("GitHub connected successfully", "success"); }, 800);
+    setTimeout(() => { setGithubConnected(true); show("GitHub connected as @alex-morgan", "success"); }, 800);
     show("Connecting to GitHub…", "info");
   };
 
@@ -244,11 +242,11 @@ function SettingsPage() {
           {/* GitHub */}
           <Section title="GitHub" subtitle="Push workspaces directly to your repositories.">
             <div className="flex flex-col gap-3">
-              <Field 
-                label="Personal Access Token (PAT)" 
-                value={githubToken} 
-                onChange={setGithubToken} 
-                type="password" 
+              <Field
+                label="Personal Access Token (PAT)"
+                value={githubToken}
+                onChange={setGithubToken}
+                type="password"
               />
               <p className="text-xs text-zinc-500">Requires `repo` scope to commit and push to your repositories.</p>
               <div className="flex justify-end">
@@ -355,7 +353,7 @@ function PasswordModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
           {error && <p className="text-xs text-rose-400">{error}</p>}
           {next && (
             <div className="flex gap-1">
-              {[1,2,3,4].map((i) => (
+              {[1, 2, 3, 4].map((i) => (
                 <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${next.length >= i * 3 ? (next.length >= 12 ? "bg-emerald-500" : next.length >= 8 ? "bg-amber-500" : "bg-rose-500") : "bg-zinc-700"}`} />
               ))}
             </div>

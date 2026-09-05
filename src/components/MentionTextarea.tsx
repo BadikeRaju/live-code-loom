@@ -42,7 +42,8 @@ export function MentionTextarea({
       if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
         if (filteredMembers[mentionIndex]) {
-          insertMention(filteredMembers[mentionIndex].name);
+          const mentionKey = filteredMembers[mentionIndex].handle || filteredMembers[mentionIndex].name;
+          insertMention(mentionKey);
         }
         return;
       }
@@ -73,7 +74,7 @@ export function MentionTextarea({
     }
   };
 
-  const insertMention = (name: string) => {
+  const insertMention = (mentionKey: string) => {
     const cursor = textareaRef.current?.selectionStart || 0;
     const textBeforeCursor = value.slice(0, cursor);
     const textAfterCursor = value.slice(cursor);
@@ -81,13 +82,13 @@ export function MentionTextarea({
     
     if (match) {
       const startPos = textBeforeCursor.lastIndexOf("@");
-      const newValue = value.slice(0, startPos) + `@[${name}] ` + textAfterCursor;
+      const newValue = value.slice(0, startPos) + `@[${mentionKey}] ` + textAfterCursor;
       onChange(newValue);
       setMentionIndex(-1);
       
       setTimeout(() => {
         if (textareaRef.current) {
-          const newCursor = startPos + name.length + 4; // @[name] + space
+          const newCursor = startPos + mentionKey.length + 4; // @[mentionKey] + space
           textareaRef.current.setSelectionRange(newCursor, newCursor);
           textareaRef.current.focus();
         }
@@ -95,7 +96,10 @@ export function MentionTextarea({
     }
   };
 
-  const filteredMembers = members.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase()));
+  const filteredMembers = members.filter(m => 
+    m.name.toLowerCase().includes(mentionQuery.toLowerCase()) || 
+    (m.handle && m.handle.toLowerCase().includes(mentionQuery.toLowerCase()))
+  );
 
   return (
     <div className="relative flex-1">
@@ -113,7 +117,7 @@ export function MentionTextarea({
           {filteredMembers.map((m, i) => (
             <div
               key={m.id}
-              onClick={() => insertMention(m.name)}
+              onClick={() => insertMention(m.handle || m.name)}
               className={`flex cursor-pointer items-center gap-2 px-3 py-2 ${i === mentionIndex ? 'bg-zinc-800 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
             >
               {m.avatar ? (
@@ -123,7 +127,10 @@ export function MentionTextarea({
                   {m.name.charAt(0)}
                 </span>
               )}
-              <span>{m.name}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="truncate">{m.name}</span>
+                {m.handle && <span className="truncate text-[10px] text-zinc-500">@{m.handle}</span>}
+              </div>
             </div>
           ))}
         </div>

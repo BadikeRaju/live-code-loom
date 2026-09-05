@@ -56,9 +56,6 @@ type FileNode = {
 };
 
 const fileTree: FileNode[] = [];
-const activity: any[] = [];
-const initialMessages: any[] = [];
-const initialVersionHistory: any[] = [];
 // --- Helpers for Base64 encoding Uint8Arrays (Yjs positions) ---
 const toBase64 = (arr: Uint8Array) => btoa(Array.from(arr).map(b => String.fromCharCode(b)).join(""));
 const fromBase64 = (str: string) => new Uint8Array(atob(str).split("").map(c => c.charCodeAt(0)));
@@ -145,8 +142,47 @@ function WorkspacePage() {
   const [comments, setComments] = useState<CommentData[]>([]);
   const [pendingComment, setPendingComment] = useState<{ start: string, end: string } | null>(null);
 
-  // Version history state (mutable)
-  const [versionHistory, setVersionHistory] = useState(initialVersionHistory);
+  // Workspace-wide Yjs doc for Activity & History
+  const { doc: workspaceDoc } = useMemo(() => {
+    if (!workspaceId || !user) return { doc: null, provider: null };
+    return getWorkspaceDoc(workspaceId, "workspace-data", user);
+  }, [workspaceId, user]);
+
+  const yactivity = useMemo(() => workspaceDoc?.getArray<any>("activity"), [workspaceDoc]);
+  const yhistory = useMemo(() => workspaceDoc?.getArray<any>("history"), [workspaceDoc]);
+
+  const [activityList, setActivityList] = useState<any[]>([]);
+  const [historyList, setHistoryList] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!yactivity) return;
+    const updateActivity = () => setActivityList(yactivity.toArray());
+    yactivity.observe(updateActivity);
+    updateActivity();
+    return () => yactivity.unobserve(updateActivity);
+  }, [yactivity]);
+
+  useEffect(() => {
+    if (!yhistory) return;
+    const updateHistory = () => {
+      setHistoryList(yhistory.toArray());
+    };
+    yhistory.observe(updateHistory);
+    updateHistory();
+    return () => yhistory.unobserve(updateHistory);
+  }, [yhistory]);
+
+  const pushActivity = useCallback((action: string, target: string) => {
+    if (yactivity && user) {
+      yactivity.insert(0, [{
+        id: `a${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        who: user.name || "User",
+        action,
+        target,
+        when: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+      }]);
+    }
+  }, [yactivity, user]);
 
   // File tree state (mutable for new file/folder)
   const [tree, setTree] = useState<FileNode[]>(fileTree);
@@ -290,11 +326,13 @@ function WorkspacePage() {
         show(data.error || "Failed to commit", "error");
         return;
       }
-      const label = data.sha ? data.sha.substring(0, 7) : `v0.${14 + versionHistory.length}`;
-      setVersionHistory((prev) => [
-        { id: `v${Date.now()}`, label, author: "You", when: "just now", note: msg },
-        ...prev,
-      ]);
+      const label = data.sha ? data.sha.substring(0, 7) : `v0.${14 + historyList.length}`;
+      const newVersion = { id: `v${Date.now()}`, label, author: user?.name || "You", when: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }), note: msg };
+      
+      if (yhistory) {
+        yhistory.insert(0, [newVersion]);
+      }
+      pushActivity("committed", label);
       setTabs((prev) => prev.map((t) => ({ ...t, dirty: false })));
       show(`✓ Committed and pushed to GitHub`, "success");
     } catch (err) {
@@ -325,6 +363,7 @@ function WorkspacePage() {
       setTabs((prev) => [...prev, { id, name, kind, dirty: true }]);
       setActive(id);
     }
+    pushActivity("created", name);
     show(`✓ Created ${type} "${name}"`, "success");
   };
 
@@ -403,6 +442,7 @@ function WorkspacePage() {
       setActive(active.replace(oldId, newId));
     }
 
+    pushActivity("renamed", newName);
     show(`✓ Renamed "${oldName}" to "${newName}"`, "success");
   };
 
@@ -639,7 +679,8 @@ function WorkspacePage() {
             <RightPanel
               active={rightTab}
               comments={comments}
-              versionHistory={versionHistory}
+              versionHistory={historyList}
+              activityList={activityList}
               workspaceId={workspace?.id}
               user={user}
               onResolveComment={(id) => {
@@ -685,6 +726,7 @@ function WorkspacePage() {
                   startPos: pendingComment.start,
                   endPos: pendingComment.end,
                 });
+                pushActivity("commented on", activeTab.name);
                 setPendingComment(null);
               }}
               pendingComment={pendingComment}
@@ -1698,6 +1740,7 @@ function RightPanel({
   active: "members" | "chat" | "activity" | "comments" | "history";
   comments: CommentData[];
   versionHistory: any[];
+  activityList: any[];
   onResolveComment: (id: string) => void;
   onReplyComment: (id: string, text: string) => void;
   onAddComment: (text: string) => void;
@@ -1717,7 +1760,7 @@ function RightPanel({
       <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
         {active === "chat" && <ChatPanel onToast={onToast} workspaceId={workspaceId} user={user} />}
         {active === "members" && <MembersPanel members={members} onInvite={onInvite} />}
-        {active === "activity" && <ActivityPanel />}
+        {active === "activity" && <ActivityPanel activity={activityList} />}
         {active === "comments" && (
           <CommentsPanel
             comments={comments}
@@ -2112,12 +2155,15 @@ function MemberRow({ member }: { member: any }) {
   );
 }
 
-function ActivityPanel() {
+function ActivityPanel({ activity }: { activity: any[] }) {
   return (
     <div className="h-full overflow-y-auto p-4">
-      <ol className="relative border-l border-zinc-800 pl-4">
-        {activity.map((a) => (
-          <li key={a.id} className="mb-5 last:mb-0">
+      {activity.length === 0 ? (
+        <p className="text-center text-xs text-zinc-500 mt-4">No recent activity.</p>
+      ) : (
+        <ol className="relative border-l border-zinc-800 pl-4">
+          {activity.map((a) => (
+            <li key={a.id} className="mb-5 last:mb-0">
             <span className="absolute -left-1 mt-1.5 size-1.5 rounded-full bg-brand ring-4 ring-surface" />
             <p className="text-xs leading-relaxed text-zinc-300">
               <span className="font-medium text-zinc-100">{a.who}</span>{" "}
@@ -2130,6 +2176,7 @@ function ActivityPanel() {
           </li>
         ))}
       </ol>
+      )}
     </div>
   );
 }
@@ -2327,14 +2374,17 @@ function HistoryPanel({
   versionHistory,
   onRestore,
 }: {
-  versionHistory: typeof initialVersionHistory;
+  versionHistory: any[];
   onRestore: (label: string) => void;
 }) {
   return (
     <div className="h-full overflow-y-auto">
-      {versionHistory.map((v, i) => (
-        <div
-          key={v.id}
+      {versionHistory.length === 0 ? (
+        <p className="text-center text-xs text-zinc-500 mt-4">No history yet.</p>
+      ) : (
+        versionHistory.map((v, i) => (
+          <div
+            key={v.id}
           className={
             "group flex items-start gap-3 border-b border-zinc-800 p-4 " +
             (i === 0 ? "bg-brand/[0.03]" : "")
@@ -2366,7 +2416,7 @@ function HistoryPanel({
             </button>
           </div>
         </div>
-      ))}
+      )))}
     </div>
   );
 }
