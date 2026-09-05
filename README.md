@@ -23,19 +23,15 @@ The frontend application features a responsive, route-protected user interface d
 
 ### Landing / Welcome Page (`/`)
 Introduction to CoFlux, feature highlights, and call-to-action buttons for login and registration.
-![Landing Page Screenshot](./Coflux.png)
-
-### Authentication Pages (`/login`, `/register`)
-Secure entry points for user authentication, managing JWT state and redirection.
-![Authentication Screenshot](./Coflux.png)
+![Landing Page Screenshot](./home-page.png)
 
 ### User Dashboard (`/dashboard`)
 Central hub displaying active workspaces, recent projects, team invitations, and quick-access metrics.
-![Dashboard Screenshot](./Coflux.png)
+![Dashboard Screenshot](./dashboard.png)
 
 ### Collaborative IDE / Editor View (`/workspace/{workspaceId}/project/{projectId}`)
 The core workspace screen featuring the Monaco code editor, live file tree, user presence avatars, real-time cursors, and GitHub sync panels.
-![Collaborative Editor Screenshot](./Coflux.png)
+![Collaborative Editor Screenshot](./IDE.png)
 
 ## Features
 
