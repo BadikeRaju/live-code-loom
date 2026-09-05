@@ -92,7 +92,7 @@ export const Route = createFileRoute("/workspace/$id")({
 
 type Tab = { id: string; name: string; kind: "code" | "docs"; dirty?: boolean };
 type Toast = { id: string; message: string; type: "success" | "error" | "info" };
-type CommentData = { id: string; author: any; content: string; resolved: boolean; createdAt: number; replies?: any[]; startPos: any; endPos: any };
+type CommentData = { id: string; author: any; content: string; resolved: boolean; createdAt: number; replies?: any[]; startPos: any; endPos: any; filename: string };
 
 /* ---- Minimal toast system ---- */
 function useToast() {
@@ -140,7 +140,7 @@ function WorkspacePage() {
 
   // Comments state
   const [comments, setComments] = useState<CommentData[]>([]);
-  const [pendingComment, setPendingComment] = useState<{ start: string, end: string } | null>(null);
+  const [pendingComment, setPendingComment] = useState<{ start: string, end: string, filename: string } | null>(null);
 
   // Workspace-wide Yjs doc for Activity & History
   const { doc: workspaceDoc } = useMemo(() => {
@@ -150,9 +150,21 @@ function WorkspacePage() {
 
   const yactivity = useMemo(() => workspaceDoc?.getArray<any>("activity"), [workspaceDoc]);
   const yhistory = useMemo(() => workspaceDoc?.getArray<any>("history"), [workspaceDoc]);
+  const ycomments = useMemo(() => workspaceDoc?.getMap<CommentData>("comments"), [workspaceDoc]);
 
   const [activityList, setActivityList] = useState<any[]>([]);
   const [historyList, setHistoryList] = useState<any[]>([]);
+  const [commentsList, setCommentsList] = useState<CommentData[]>([]);
+
+  useEffect(() => {
+    if (!ycomments) return;
+    const updateComments = () => {
+      setCommentsList(Array.from(ycomments.values()));
+    };
+    ycomments.observe(updateComments);
+    updateComments();
+    return () => ycomments.unobserve(updateComments);
+  }, [ycomments]);
 
   useEffect(() => {
     if (!yactivity) return;
@@ -625,26 +637,10 @@ function WorkspacePage() {
                     key={activeTab.id}
                     filename={activeTab.id}
                     workspaceId={workspace.id}
-                    onCommentsChange={setComments}
-                    onResolveComment={(id) => {
-                      const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
-                      const map = doc.getMap<CommentData>("comments");
-                      const existing = map.get(id);
-                      if (existing) map.set(id, { ...existing, resolved: true });
-                    }}
-                    onReplyComment={(id, text) => {
-                      const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
-                      const map = doc.getMap<CommentData>("comments");
-                      const existing = map.get(id);
-                      if (existing) {
-                        map.set(id, {
-                          ...existing,
-                          replies: [...(existing.replies || []), { author: { id: user?.id, name: user?.name || "User", color: user?.color, avatar: user?.avatar }, content: text, createdAt: Date.now() }],
-                        });
-                      }
-                    }}
+                    comments={commentsList.filter(c => c.filename === activeTab.id)}
+                    user={user}
                     onRequestComment={(pos) => {
-                      setPendingComment(pos);
+                      setPendingComment({ ...pos, filename: activeTab.id });
                       setRightSidebarOpen(true);
                       setRightTab("comments");
                     }}
@@ -678,24 +674,22 @@ function WorkspacePage() {
           >
             <RightPanel
               active={rightTab}
-              comments={comments}
+              comments={commentsList}
               versionHistory={historyList}
               activityList={activityList}
               workspaceId={workspace?.id}
               user={user}
               onResolveComment={(id) => {
-                if (!activeTab) return;
-                const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
-                const map = doc.getMap<CommentData>("comments");
+                if (!workspaceDoc) return;
+                const map = workspaceDoc.getMap<CommentData>("comments");
                 const existing = map.get(id);
                 if (existing) {
                   map.set(id, { ...existing, resolved: true });
                 }
               }}
               onReplyComment={(id, text) => {
-                if (!activeTab) return;
-                const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
-                const map = doc.getMap<CommentData>("comments");
+                if (!workspaceDoc) return;
+                const map = workspaceDoc.getMap<CommentData>("comments");
                 const existing = map.get(id);
                 if (existing) {
                   map.set(id, {
@@ -712,12 +706,12 @@ function WorkspacePage() {
                 }
               }}
               onAddComment={(text) => {
-                if (!pendingComment || !activeTab) return;
-                const doc = getWorkspaceDoc(workspace.id, activeTab.id, user).doc;
-                const map = doc.getMap<CommentData>("comments");
+                if (!pendingComment || !workspaceDoc) return;
+                const map = workspaceDoc.getMap<CommentData>("comments");
                 const id = Math.random().toString(36).slice(2);
                 map.set(id, {
                   id,
+                  filename: active,
                   author: { id: user?.id, name: user?.name || "User", color: user?.color, avatar: user?.avatar },
                   content: text,
                   resolved: false,
@@ -726,7 +720,7 @@ function WorkspacePage() {
                   startPos: pendingComment.start,
                   endPos: pendingComment.end,
                 });
-                pushActivity("commented on", activeTab.name);
+                pushActivity("commented on", pendingComment.filename);
                 setPendingComment(null);
               }}
               pendingComment={pendingComment}
@@ -1304,8 +1298,19 @@ const defaultContent = (filename: string) => {
   return `// Start coding in ${filename}...\n`;
 };
 
-function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment, onResolveComment, onReplyComment }: { filename: string; workspaceId: string; onCommentsChange: (c: CommentData[]) => void; onRequestComment: (p: { start: string, end: string }) => void; onResolveComment?: (id: string) => void; onReplyComment?: (id: string, text: string) => void; }) {
-  const { user, token } = useAuth();
+function CodeEditor({
+  filename,
+  workspaceId,
+  comments,
+  user,
+  onRequestComment
+}: {
+  filename: string;
+  workspaceId: string;
+  comments: CommentData[];
+  user: any;
+  onRequestComment?: (pos: { start: string; end: string }) => void;
+}) {
 
   const language = filename.endsWith(".ts") || filename.endsWith(".tsx") ? "typescript"
     : filename.endsWith(".json") ? "json"
@@ -1430,17 +1435,6 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
   const [activeInlineComment, setActiveInlineComment] = useState<{ id: string, top: number, left: number } | null>(null);
   const [isEditorMounted, setIsEditorMounted] = useState(false);
 
-  const ycomments = useMemo(() => doc.getMap<CommentData>("comments"), [doc]);
-
-  useEffect(() => {
-    const updateComments = () => {
-      onCommentsChange(Array.from(ycomments.values()));
-    };
-    ycomments.observe(updateComments);
-    updateComments();
-    return () => ycomments.unobserve(updateComments);
-  }, [ycomments, onCommentsChange]);
-
   useEffect(() => {
     if (!editorRef.current || !decorationsRef.current || !monacoRef.current || !isEditorMounted) return;
 
@@ -1452,7 +1446,7 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
       const newDecorations: any[] = [];
       const commentIds: string[] = [];
 
-      ycomments.forEach((c) => {
+      comments.forEach((c) => {
         if (c.resolved || !c.startPos || !c.endPos) return;
 
         try {
@@ -1488,15 +1482,13 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
       decoToCommentMapRef.current = new Map(decoIds.map((id: string, i: number) => [id, commentIds[i]]));
     };
 
-    ycomments.observe(updateDecorations);
     ytext.observe(updateDecorations);
     updateDecorations();
 
     return () => {
-      ycomments.unobserve(updateDecorations);
       ytext.unobserve(updateDecorations);
     };
-  }, [ycomments, ytext, doc, isEditorMounted]);
+  }, [comments, ytext, doc, isEditorMounted]);
 
   const handleEditorMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
@@ -1562,7 +1554,7 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
     });
   };
 
-  const activeCommentObj = activeInlineComment ? Array.from(ycomments.values()).find(c => c.id === activeInlineComment.id) : null;
+  const activeCommentObj = activeInlineComment ? comments.find(c => c.id === activeInlineComment.id) : null;
 
   return (
     <div className="h-full w-full py-2 relative">
@@ -1589,10 +1581,10 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
           <CommentCard
             c={activeCommentObj}
             onResolve={(id) => {
-              onResolveComment?.(id);
+              // ...
               setActiveInlineComment(null);
             }}
-            onReply={(id, text) => onReplyComment?.(id, text)}
+            onReply={(id, text) => { /* ... */ }}
           />
         </div>
       )}
@@ -1726,6 +1718,7 @@ function RightPanel({
   active,
   comments,
   versionHistory,
+  activityList,
   onResolveComment,
   onReplyComment,
   onAddComment,
@@ -2282,7 +2275,7 @@ function CommentCard({
     <div className={"border-b border-zinc-800 p-4 " + (muted ? "opacity-60" : "")}>
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-[10px] text-zinc-500">
-          Code Selection
+          {c.filename}
         </span>
         {c.resolved ? (
           <span className="inline-flex items-center gap-1 rounded bg-brand/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-brand">
