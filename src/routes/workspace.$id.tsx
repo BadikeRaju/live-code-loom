@@ -1495,11 +1495,13 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
 
     ycomments.observe(updateDecorations);
     ytext.observe(updateDecorations);
+    const disposable = editorRef.current.onDidChangeModelContent(updateDecorations);
     updateDecorations();
 
     return () => {
       ycomments.unobserve(updateDecorations);
       ytext.unobserve(updateDecorations);
+      disposable.dispose();
     };
   }, [ycomments, ytext, doc, isEditorMounted]);
 
