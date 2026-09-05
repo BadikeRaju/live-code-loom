@@ -1449,57 +1449,48 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
   useEffect(() => {
     if (!editorRef.current || !decorationsRef.current || !monacoRef.current || !isEditorMounted) return;
 
-    let timeoutId: any;
-
     const updateDecorations = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        const editor = editorRef.current;
-        const model = editor?.getModel();
-        if (!model) return;
+      const editor = editorRef.current;
+      const model = editor.getModel();
+      if (!model) return;
 
-        const newDecorations: any[] = [];
-        const commentIds: string[] = [];
+      const newDecorations: any[] = [];
+      const commentIds: string[] = [];
 
-        ycomments.forEach((c) => {
-          if (c.resolved || !c.startPos || !c.endPos) return;
+      ycomments.forEach((c) => {
+        if (c.resolved || !c.startPos || !c.endPos) return;
 
-          try {
-            let startPosArr: Uint8Array;
-            if (typeof c.startPos === "string") startPosArr = fromBase64(c.startPos);
-            else startPosArr = c.startPos instanceof Uint8Array ? c.startPos : new Uint8Array(Object.values(c.startPos || {}));
+        try {
+          let startPosArr: Uint8Array;
+          if (typeof c.startPos === "string") startPosArr = fromBase64(c.startPos);
+          else startPosArr = c.startPos instanceof Uint8Array ? c.startPos : new Uint8Array(Object.values(c.startPos || {}));
 
-            let endPosArr: Uint8Array;
-            if (typeof c.endPos === "string") endPosArr = fromBase64(c.endPos);
-            else endPosArr = c.endPos instanceof Uint8Array ? c.endPos : new Uint8Array(Object.values(c.endPos || {}));
+          let endPosArr: Uint8Array;
+          if (typeof c.endPos === "string") endPosArr = fromBase64(c.endPos);
+          else endPosArr = c.endPos instanceof Uint8Array ? c.endPos : new Uint8Array(Object.values(c.endPos || {}));
 
-            const startAbs = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(startPosArr), doc);
-            const endAbs = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(endPosArr), doc);
-            
-            if (startAbs && endAbs) {
-              const start = model.getPositionAt(startAbs.index);
-              const end = model.getPositionAt(endAbs.index);
-              newDecorations.push({
-                range: new monacoRef.current.Range(start.lineNumber, start.column, end.lineNumber, end.column),
-                options: {
-                  className: "comment-highlight",
-                  inlineClassName: "comment-highlight",
-                  linesDecorationsClassName: "comment-margin-icon",
-                  hoverMessage: { value: `**${c.author?.name || "User"}**: ${c.content}\n\n*Click to reply or resolve*` },
-                }
-              });
-              commentIds.push(c.id);
-            }
-          } catch (e) {
-            console.error("Failed to decode comment relative position:", e);
+          const startAbs = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(startPosArr), doc);
+          const endAbs = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(endPosArr), doc);
+          if (startAbs && endAbs) {
+            const start = model.getPositionAt(startAbs.index);
+            const end = model.getPositionAt(endAbs.index);
+            newDecorations.push({
+              range: new monacoRef.current.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+              options: {
+                className: "comment-highlight",
+                inlineClassName: "comment-highlight",
+                linesDecorationsClassName: "comment-margin-icon",
+                hoverMessage: { value: `**${c.author?.name || "User"}**: ${c.content}\n\n*Click to reply or resolve*` },
+              }
+            });
+            commentIds.push(c.id);
           }
-        });
-        
-        if (decorationsRef.current) {
-          const decoIds = decorationsRef.current.set(newDecorations);
-          decoToCommentMapRef.current = new Map(decoIds.map((id: string, i: number) => [id, commentIds[i]]));
+        } catch (e) {
+          console.error("Failed to decode comment relative position:", e);
         }
-      }, 50);
+      });
+      const decoIds = decorationsRef.current.set(newDecorations);
+      decoToCommentMapRef.current = new Map(decoIds.map((id: string, i: number) => [id, commentIds[i]]));
     };
 
     ycomments.observe(updateDecorations);
@@ -1507,7 +1498,6 @@ function CodeEditor({ filename, workspaceId, onCommentsChange, onRequestComment,
     updateDecorations();
 
     return () => {
-      clearTimeout(timeoutId);
       ycomments.unobserve(updateDecorations);
       ytext.unobserve(updateDecorations);
     };
