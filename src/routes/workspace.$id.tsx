@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
+import { IndexeddbPersistence } from "y-indexeddb";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useAuth } from "@/lib/auth-context";
 import { API_URL, WS_URL } from "@/lib/config";
@@ -1277,6 +1278,10 @@ function getWorkspaceDoc(workspaceId: string, filename: string, user: any) {
 
   if (typeof window !== "undefined" && !yproviders.has(roomName)) {
     const doc = ydocs.get(roomName)!;
+    
+    // Add local IndexedDB persistence so state is restored before websocket connects
+    new IndexeddbPersistence(roomName, doc);
+    
     const provider = new WebsocketProvider(WS_URL, roomName, doc);
 
     provider.awareness.setLocalStateField("user", {
@@ -1758,7 +1763,7 @@ function RightPanel({
         <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-100">{active}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
-        {active === "chat" && <ChatPanel onToast={onToast} workspaceId={workspaceId} user={user} />}
+        {active === "chat" && <ChatPanel onToast={onToast} workspaceId={workspaceId} user={user} members={members} />}
         {active === "members" && <MembersPanel members={members} onInvite={onInvite} />}
         {active === "activity" && <ActivityPanel activity={activityList} />}
         {active === "comments" && (
@@ -1769,6 +1774,7 @@ function RightPanel({
             onReply={onReplyComment}
             onAdd={onAddComment}
             onCancelPending={() => { }}
+            members={members}
           />
         )}
         {active === "history" && (
@@ -1782,11 +1788,13 @@ function RightPanel({
 function ChatPanel({
   onToast,
   workspaceId,
-  user
+  user,
+  members
 }: {
   onToast: (msg: string, type?: "success" | "error" | "info") => void;
   workspaceId?: string;
   user?: any;
+  members: any[];
 }) {
   const [draft, setDraft] = useState("");
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -2188,6 +2196,7 @@ function CommentsPanel({
   onReply,
   onAdd,
   onCancelPending,
+  members,
 }: {
   comments: CommentData[];
   pendingComment: any;
@@ -2195,6 +2204,7 @@ function CommentsPanel({
   onReply: (id: string, text: string) => void;
   onAdd: (text: string) => void;
   onCancelPending: () => void;
+  members: any[];
 }) {
   const [draft, setDraft] = useState("");
   const sortedComments = useMemo(() => {
@@ -2245,13 +2255,13 @@ function CommentsPanel({
         Open — {grouped.open.length}
       </div>
       {grouped.open.map((c) => (
-        <CommentCard key={c.id} c={c} onResolve={onResolve} onReply={onReply} />
+        <CommentCard key={c.id} c={c} onResolve={onResolve} onReply={onReply} members={members} />
       ))}
       <div className="border-y border-zinc-800 px-4 py-3 font-mono text-[10px] uppercase tracking-widest text-zinc-500">
         Resolved — {grouped.resolved.length}
       </div>
       {grouped.resolved.map((c) => (
-        <CommentCard key={c.id} c={c} muted onResolve={onResolve} onReply={onReply} />
+        <CommentCard key={c.id} c={c} muted onResolve={onResolve} onReply={onReply} members={members} />
       ))}
     </div>
   );
@@ -2262,11 +2272,13 @@ function CommentCard({
   muted,
   onResolve,
   onReply,
+  members,
 }: {
   c: CommentData;
   muted?: boolean;
   onResolve: (id: string) => void;
   onReply: (id: string, text: string) => void;
+  members: any[];
 }) {
   const [replying, setReplying] = useState(false);
   const [replyText, setReplyText] = useState("");
